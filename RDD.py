@@ -1,3 +1,5 @@
+from itertools import *
+
 '''
     RDD
 '''
@@ -92,9 +94,7 @@ class Union(RDD):
         self.resource = resource
 
     def iterator(self):
-        for i in self.parent.iterator():
-            yield i
-        for i in self.resource.iterator():
+        for i in chain(self.parent.iterator(), self.resource.iterator()):
             yield i
 
 class Join(RDD):
@@ -105,8 +105,8 @@ class Join(RDD):
         self.resource = resource
 
     def iterator(self):
-        for i in self.parent.iterator():
-            yield (i[0], [i[1], self.resource.iterator().next()[1]])
+        for i in izip(self.parent.iterator(), self.resource.iterator()):
+            yield (i[0][0], [i[0][1], i[1][1]])
 
 '''
     Spark
@@ -129,7 +129,7 @@ class DictData(RDD):
         self.elements = data
 
     def iterator(self):
-        return self.elements.iteritems()
+        return iter(self.elements.iteritems())
 
 class TextData(RDD):
 
@@ -154,14 +154,14 @@ class TextFile(RDD):
 
 if __name__ == '__main__':
     spark = Spark()
-    #data = [1,2,3,4,5]
-    #RDDA = spark.textData(data).map(lambda x: x+1).filter(lambda x: x > 3)
-    #RDDB = spark.textData(data).map(lambda x: x+4).filter(lambda x: x > 8)
-    #print RDDA.collect()
-    #print RDDB.collect()
-    #RDDAB = RDDA.union(RDDB)
-    #print RDDAB.collect()
-    #print RDDAB.reduce(lambda a, b: a + b)
+    data = [1,2,3,4,5]
+    RDDA = spark.textData(data).map(lambda x: x+1).filter(lambda x: x > 3)
+    RDDB = spark.textData(data).map(lambda x: x+4).filter(lambda x: x > 8)
+    print RDDA.collect()
+    print RDDB.collect()
+    RDDAB = RDDA.union(RDDB)
+    print RDDAB.collect()
+    print RDDAB.reduce(lambda a, b: a + b)
     
     data2 = {'a':1, 'b':2, 'c':3, 'd':5}
     data3 = {'a':6, 'b':7, 'c':10, 'd':2}
@@ -169,4 +169,4 @@ if __name__ == '__main__':
     RDDD = spark.dictData(data3)
     #print RDDC.collect()
     #print RDDD.collect()
-    print RDDC.join(RDDD).collect()
+    #print RDDC.join(RDDD).collect()
