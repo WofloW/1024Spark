@@ -53,7 +53,6 @@ class RDD(object):
             result = f(result, i)
         return result
 
-
 class Map(RDD):
 
     def __init__(self, parent, func):
@@ -66,8 +65,7 @@ class Map(RDD):
 
     def iterator(self):
         print "Class: " + self.__class__.__name__
-        for i in self.parent.iterator():
-            yield self.func(i)
+        return imap(self.func, self.parent.iterator())
 
 class FlatMap(RDD):
 
@@ -81,8 +79,8 @@ class FlatMap(RDD):
 
     def iterator(self):
         print "Class: " + self.__class__.__name__
-        for i in self.parent.iterator():
-            for j in self.func(i):
+        for i in imap(self.func, self.parent.iterator()):
+            for j in i:
                 yield j
 
 class Filter(RDD):
@@ -97,9 +95,7 @@ class Filter(RDD):
 
     def iterator(self):
         print "Class: " + self.__class__.__name__
-        for i in self.parent.iterator():
-            if self.func(i):
-                yield i
+        return ifilter(self.func, self.parent.iterator())
 
 class Union(RDD):
 
@@ -109,8 +105,7 @@ class Union(RDD):
         self.resource = resource
 
     def iterator(self):
-        for i in chain(self.parent.iterator(), self.resource.iterator()):
-            yield i
+        return chain(self.parent.iterator(), self.resource.iterator())
 
 class Join(RDD):
 
