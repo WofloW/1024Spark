@@ -26,6 +26,9 @@ class RDD(object):
     def map(self, f):
         return Map(self, f)
 
+    def flatMap(self, f):
+        return FlatMap(self, f)
+
     def filter(self, f):
         return Filter(self, f)
 
@@ -38,8 +41,7 @@ class RDD(object):
     def collect(self):
         result = []
         for i in self.iterator():
-            if i != None:
-                result.append(i)
+            result.append(i)
         return result
     
     def count(self):
@@ -48,8 +50,7 @@ class RDD(object):
     def reduce(self, f):
         result = 0
         for i in self.iterator():
-            if i != None:
-                result = f(result, i)
+            result = f(result, i)
         return result
 
 
@@ -68,6 +69,22 @@ class Map(RDD):
         for i in self.parent.iterator():
             yield self.func(i)
 
+class FlatMap(RDD):
+
+    def __init__(self, parent, func):
+        RDD.__init__(self)
+        self.parent = parent
+        self.func = func
+    
+    def dependencies(self):
+        return self.parent
+
+    def iterator(self):
+        print "Class: " + self.__class__.__name__
+        for i in self.parent.iterator():
+            for j in self.func(i):
+                yield j
+
 class Filter(RDD):
     
     def __init__(self, parent, func):
@@ -83,8 +100,6 @@ class Filter(RDD):
         for i in self.parent.iterator():
             if self.func(i):
                 yield i
-            else:
-                yield None
 
 class Union(RDD):
 
@@ -161,7 +176,8 @@ if __name__ == '__main__':
     print RDDB.collect()
     RDDAB = RDDA.union(RDDB)
     print RDDAB.collect()
-    print RDDAB.reduce(lambda a, b: a + b)
+    #print RDDAB.reduce(lambda a, b: a + b)
+    print RDDAB.flatMap(lambda x: range(x)).collect()
     
     data2 = {'a':1, 'b':2, 'c':3, 'd':5}
     data3 = {'a':6, 'b':7, 'c':10, 'd':2}
