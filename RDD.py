@@ -84,7 +84,8 @@ class Map(RDD):
 
     def iterator(self):
         print "Class: " + self.__class__.__name__
-        return imap(self.func, self.parent.iterator())
+        for r in imap(self.func, self.parent.iterator()):
+            yield r
 
 class FlatMap(RDD):
 
@@ -114,7 +115,8 @@ class Filter(RDD):
 
     def iterator(self):
         print "Class: " + self.__class__.__name__
-        return ifilter(self.func, self.parent.iterator())
+        for r in ifilter(self.func, self.parent.iterator()):
+            yield r
 
 class Union(RDD):
 
@@ -124,7 +126,8 @@ class Union(RDD):
         self.resource = resource
 
     def iterator(self):
-        return chain(self.parent.iterator(), self.resource.iterator())
+        for r in chain(self.parent.iterator(), self.resource.iterator()):
+            yield r
 
 class Join(RDD):
 
@@ -145,7 +148,8 @@ class CrossProduct(RDD):
         self.resource = resource
 
     def iterator(self):
-        return product(self.parent.iterator(), self.resource.iterator())
+        for r in product(self.parent.iterator(), self.resource.iterator()):
+            yield r
 
 class GroupByKey(RDD):
 
@@ -153,14 +157,15 @@ class GroupByKey(RDD):
         RDD.__init__(self)
         self.parent = parent
         self.result = {}
-
+    
     def iterator(self):
         for i in self.parent.iterator():
             if self.result.has_key(i[0]):
                 self.result[i[0]].append(i[1])
             else:
                 self.result[i[0]] = [i[1]]
-        return self.result.iteritems()
+        for r in self.result.iteritems():
+            yield r
 
 class ReduceByKey(RDD):
 
@@ -176,7 +181,8 @@ class ReduceByKey(RDD):
                 self.result[i[0]] = self.func(self.result[i[0]], i[1])
             else:
                 self.result[i[0]] = i[1]
-        return self.result.iteritems()
+        for r in self.result.iteritems():
+            yield r
 
 '''
     Spark
