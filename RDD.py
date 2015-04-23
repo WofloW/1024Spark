@@ -44,6 +44,9 @@ class RDD(object):
     def groupByKey(self):
         return GroupByKey(self)
 
+    def reduceByKey(self, f):
+        return ReduceByKey(self, f)
+
     def collect(self):
         result = []
         for i in self.iterator():
@@ -160,6 +163,22 @@ class GroupByKey(RDD):
                 self.result[i[0]] = [i[1]]
         return self.result.iteritems()
 
+class ReduceByKey(RDD):
+
+    def __init__(self, parent, func):
+        RDD.__init__(self)
+        self.parent = parent
+        self.func = func
+        self.result = {}
+
+    def iterator(self):
+        for i in self.parent.iterator():
+            if self.result.has_key(i[0]):
+                self.result[i[0]] = self.func(self.result[i[0]], i[1])
+            else:
+                self.result[i[0]] = i[1]
+        return self.result.iteritems()
+
 '''
     Spark
 '''
@@ -195,8 +214,8 @@ class LoadFile(RDD):
 if __name__ == '__main__':
     spark = Spark()
     data = [1,2,3,4,5]
-    RDDA = spark.loadData(data).map(lambda x: x+1).filter(lambda x: x > 3)
-    RDDB = spark.loadData(data).map(lambda x: x+4).filter(lambda x: x > 8)
+    RDDA = spark.loadData(data).map(lambda x: x + 1).filter(lambda x: x > 3)
+    RDDB = spark.loadData(data).map(lambda x: x + 4).filter(lambda x: x > 8)
     #print RDDA.collect()
     #print RDDB.collect()
     RDDAB = RDDA.union(RDDB)
@@ -212,4 +231,5 @@ if __name__ == '__main__':
     #print RDDC.collect()
     #print RDDD.collect()
     #print RDDC.join(RDDD).collect()
-    print RDDC.groupByKey().collect()
+    #print RDDC.groupByKey().collect()
+    print RDDC.reduceByKey(lambda a, b: a + b).collect()
