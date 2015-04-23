@@ -38,6 +38,9 @@ class RDD(object):
     def join(self, resource):
         return Join(self, resource)
 
+    def crossProduct(self, resource):
+        return CrossProduct(self, resource)
+
     def collect(self):
         result = []
         for i in self.iterator():
@@ -52,6 +55,17 @@ class RDD(object):
         for i in self.iterator():
             result = f(result, i)
         return result
+
+class Sample(RDD):
+
+    def __init__(self, parent, fraction):
+        RDD.__init__(self)
+        this.parent = parent
+        this.fraction = fraction
+
+    def iterator(self):
+        pass
+
 
 class Map(RDD):
 
@@ -118,6 +132,16 @@ class Join(RDD):
         for i in izip(self.parent.iterator(), self.resource.iterator()):
             yield (i[0][0], [i[0][1], i[1][1]])
 
+class CrossProduct(RDD):
+
+    def __init__(self, parent, resource):
+        RDD.__init__(self)
+        self.parent = parent
+        self.resource = resource
+
+    def iterator(self):
+        return product(self.parent.iterator(), self.resource.iterator())
+
 '''
     Spark
 '''
@@ -170,9 +194,10 @@ if __name__ == '__main__':
     print RDDA.collect()
     print RDDB.collect()
     RDDAB = RDDA.union(RDDB)
-    print RDDAB.collect()
+    #print RDDAB.collect()
     #print RDDAB.reduce(lambda a, b: a + b)
-    print RDDAB.flatMap(lambda x: range(x)).collect()
+    #print RDDAB.flatMap(lambda x: range(x)).collect()
+    print RDDA.crossProduct(RDDB).collect()
     
     data2 = {'a':1, 'b':2, 'c':3, 'd':5}
     data3 = {'a':6, 'b':7, 'c':10, 'd':2}
