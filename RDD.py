@@ -41,6 +41,9 @@ class RDD(object):
     def crossProduct(self, resource):
         return CrossProduct(self, resource)
 
+    def groupByKey(self):
+        return GroupByKey(self)
+
     def collect(self):
         result = []
         for i in self.iterator():
@@ -142,39 +145,42 @@ class CrossProduct(RDD):
     def iterator(self):
         return product(self.parent.iterator(), self.resource.iterator())
 
+class GroupByKey(RDD):
+
+    def __init__(self, parent):
+        RDD.__init__(self)
+        self.parent = parent
+        self.result = {}
+
+    def iterator(self):
+        for i in self.parent.iterator():
+            if self.result.has_key(i[0]):
+                self.result[i[0]].append(i[1])
+            else:
+                self.result[i[0]] = [i[1]]
+        return self.result.iteritems()
+
 '''
     Spark
 '''
 class Spark(object):
 
-    def dictData(self, data):
-        return DictData(data)
+    def loadData(self, data):
+        return LoadData(data)
 
-    def textData(self, data):
-        return TextData(data)
+    def loadFile(self, path):
+        return LoadFile(data)
 
-    def textFile(self, path):
-        return TextFile(data)
-
-class DictData(RDD):
+class LoadData(RDD):
 
     def __init__(self, data):
         RDD.__init__(self)
-        self.elements = data
+        self.data = data
 
     def iterator(self):
-        return iter(self.elements.iteritems())
+        return iter(self.data)
 
-class TextData(RDD):
-
-    def __init__(self, data):
-        RDD.__init__(self)
-        self.elements = data
-
-    def iterator(self):
-        return iter(self.elements)
-
-class TextFile(RDD):
+class LoadFile(RDD):
 
     def __init__(self, path):
         RDD.__init__(self)
@@ -189,20 +195,21 @@ class TextFile(RDD):
 if __name__ == '__main__':
     spark = Spark()
     data = [1,2,3,4,5]
-    RDDA = spark.textData(data).map(lambda x: x+1).filter(lambda x: x > 3)
-    RDDB = spark.textData(data).map(lambda x: x+4).filter(lambda x: x > 8)
-    print RDDA.collect()
-    print RDDB.collect()
+    RDDA = spark.loadData(data).map(lambda x: x+1).filter(lambda x: x > 3)
+    RDDB = spark.loadData(data).map(lambda x: x+4).filter(lambda x: x > 8)
+    #print RDDA.collect()
+    #print RDDB.collect()
     RDDAB = RDDA.union(RDDB)
     #print RDDAB.collect()
     #print RDDAB.reduce(lambda a, b: a + b)
     #print RDDAB.flatMap(lambda x: range(x)).collect()
-    print RDDA.crossProduct(RDDB).collect()
+    #print RDDA.crossProduct(RDDB).collect()
     
-    data2 = {'a':1, 'b':2, 'c':3, 'd':5}
-    data3 = {'a':6, 'b':7, 'c':10, 'd':2}
-    RDDC = spark.dictData(data2)
-    RDDD = spark.dictData(data3)
+    data2 = [('a', 1), ('b', 2), ('c', 3), ('d', 5), ('a', 6), ('d', 12)]
+    data3 = [('a', 6), ('b', 7), ('c', 10), ('d', 2)]
+    RDDC = spark.loadData(data2)
+    RDDD = spark.loadData(data3)
     #print RDDC.collect()
     #print RDDD.collect()
     #print RDDC.join(RDDD).collect()
+    print RDDC.groupByKey().collect()
