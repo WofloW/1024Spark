@@ -72,7 +72,6 @@ class Sample(RDD):
     def iterator(self):
         pass
 
-
 class Map(RDD):
 
     def __init__(self, parent, func):
@@ -188,7 +187,7 @@ class Spark(object):
         return LoadData(data)
 
     def loadFile(self, path):
-        return LoadFile(data)
+        return LoadFile(path)
 
 class LoadData(RDD):
 
@@ -232,4 +231,7 @@ if __name__ == '__main__':
     #print RDDD.collect()
     #print RDDC.join(RDDD).collect()
     #print RDDC.groupByKey().collect()
-    print RDDC.reduceByKey(lambda a, b: a + b).collect()
+    #print RDDC.reduceByKey(lambda a, b: a + b).collect()
+
+    counts = spark.loadFile("myfile").flatMap(lambda line: line.split(" ")).map(lambda word: (word, 1)).reduceByKey(lambda a, b: a + b)
+    print counts.collect()
