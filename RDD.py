@@ -1,4 +1,6 @@
 from itertools import *
+from operator import add
+import re
 
 '''
     RDD
@@ -7,6 +9,7 @@ class RDD(object):
 
     def __init__(self):
         self.partitions = []
+        self.cache = None
 
     def partitioner(self):
         pass
@@ -21,13 +24,16 @@ class RDD(object):
         pass
 
     def iterator(self):
-        pass
+        print "Class: " + self.__class__.__name__
 
     def map(self, f):
         return Map(self, f)
 
     def flatMap(self, f):
         return FlatMap(self, f)
+
+    def mapValues(self, f):
+        return MapValues(self, f)
 
     def filter(self, f):
         return Filter(self, f)
@@ -83,7 +89,7 @@ class Map(RDD):
         return self.parent
 
     def iterator(self):
-        print "Class: " + self.__class__.__name__
+        RDD.iterator(self)
         for r in imap(self.func, self.parent.iterator()):
             yield r
 
@@ -98,10 +104,22 @@ class FlatMap(RDD):
         return self.parent
 
     def iterator(self):
-        print "Class: " + self.__class__.__name__
+        RDD.iterator(self)
         for i in imap(self.func, self.parent.iterator()):
             for j in i:
                 yield j
+
+class MapValues(RDD):
+    
+    def __init__(self, parent, func):
+        RDD.__init__(self)
+        self.parent = parent
+        self.func = func
+        
+    def iterator(self):
+        RDD.iterator(self)
+        for r in self.parent.iterator():
+            yield (r[0], self.func(r[1]))
 
 class Filter(RDD):
     
@@ -114,7 +132,7 @@ class Filter(RDD):
         return self.parent
 
     def iterator(self):
-        print "Class: " + self.__class__.__name__
+        RDD.iterator(self)
         for r in ifilter(self.func, self.parent.iterator()):
             yield r
 
@@ -126,6 +144,7 @@ class Union(RDD):
         self.resource = resource
 
     def iterator(self):
+        RDD.iterator(self)
         for r in chain(self.parent.iterator(), self.resource.iterator()):
             yield r
 
@@ -137,6 +156,7 @@ class Join(RDD):
         self.resource = resource
 
     def iterator(self):
+        RDD.iterator(self)
         for i in izip(self.parent.iterator(), self.resource.iterator()):
             yield (i[0][0], [i[0][1], i[1][1]])
 
@@ -148,6 +168,7 @@ class CrossProduct(RDD):
         self.resource = resource
 
     def iterator(self):
+        RDD.iterator(self)
         for r in product(self.parent.iterator(), self.resource.iterator()):
             yield r
 
@@ -159,6 +180,7 @@ class GroupByKey(RDD):
         self.result = {}
     
     def iterator(self):
+        RDD.iterator(self)
         for i in self.parent.iterator():
             if self.result.has_key(i[0]):
                 self.result[i[0]].append(i[1])
@@ -176,6 +198,7 @@ class ReduceByKey(RDD):
         self.result = {}
 
     def iterator(self):
+        RDD.iterator(self)
         for i in self.parent.iterator():
             if self.result.has_key(i[0]):
                 self.result[i[0]] = self.func(self.result[i[0]], i[1])
@@ -202,7 +225,9 @@ class LoadData(RDD):
         self.data = data
 
     def iterator(self):
-        return iter(self.data)
+        RDD.iterator(self)
+        for r in iter(self.data):
+            yield r
 
 class LoadFile(RDD):
 
@@ -214,7 +239,20 @@ class LoadFile(RDD):
         self.elements = data
 
     def iterator(self):
-        return iter(self.elements)
+        RDD.iterator(self)
+        for r in iter(self.elements):
+            yield r
+
+def computeContribs(urls, rank):
+    """Calculates URL contributions to the rank of other URLs."""
+    num_urls = len(urls)
+    for url in urls:
+        yield (url, rank / num_urls)
+
+def parseNeighbors(urls):
+    """Parses a urls pair string into urls pair."""
+    parts = re.split(r'\s+', urls)
+    return parts[0], parts[1]
 
 if __name__ == '__main__':
     spark = Spark()
@@ -238,6 +276,24 @@ if __name__ == '__main__':
     #print RDDC.join(RDDD).collect()
     #print RDDC.groupByKey().collect()
     #print RDDC.reduceByKey(lambda a, b: a + b).collect()
+    lines = spark.loadFile("wordcount.txt")
+    words = lines.flatMap(lambda line: line.split(" "))
+    wordDict = words.map(lambda word: (word, 1))
+    counts = wordDict.reduceByKey(lambda a, b: a + b)
+    #print counts.result
+    #print counts.collect()
 
-    counts = spark.loadFile("myfile").flatMap(lambda line: line.split(" ")).map(lambda word: (word, 1)).reduceByKey(lambda a, b: a + b)
-    print counts.collect()
+    lines = spark.loadFile("pagerank.txt")
+    links = lines.map(lambda urls: parseNeighbors(urls)).groupByKey()
+    ranks = links.map(lambda url_neighbors: (url_neighbors[0], 1.0))
+    # Calculates and updates URL ranks continuously using PageRank algorithm.
+    for iteration in range(10):
+        # Calculates URL contributions to the rank of other URLs.
+        contribs = links.join(ranks).flatMap(
+            lambda url_urls_rank: computeContribs(url_urls_rank[1][0], url_urls_rank[1][1]))
+        # Re-calculates URL ranks based on neighbor contributions.
+        ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * 0.85 + 0.15)
+
+    # Collects all URL ranks and dump them to console.
+    for (link, rank) in ranks.collect():
+        print("%s has rank: %s." % (link, rank))
