@@ -1,6 +1,8 @@
 from itertools import *
 from collections import defaultdict
 from operator import add
+import gevent
+from gevent.event import Event
 import re
 
 '''
@@ -44,7 +46,7 @@ class HashPartitioner(Partitioner):
         self.numPartitions = partitions
 
     def getPartition(self, key):
-            #todo portable_hash
+            #todo portable_hash -> default hash
             return nonNegativeMod(hash(key), self.numPartitions)
 
 #not in use
@@ -96,14 +98,13 @@ class RangeDependency(NarrowDependency):
         if partitionId >= outStart and partitionId < outStart + length:
             return [partitionId - outStart + inStart]
 
-#not yet complete
+#1!
 class ShuffleDependency(Dependencies):
 
     def __init__(self, rdd, partitioner, serializer=None):
         Dependencies.__init__(self, rdd)
         self.partitioner = partitioner
-        #todo
-        self.shuffleId = 0
+        self.shuffleId = rdd.context().newShuffleId()
         self.serializer = serializer
 
 '''
@@ -127,7 +128,8 @@ class RDD(object):
         self.partitioner = None
         #will be overwritten when we're checkpointed
         self.dependencies_ = None
-        self.partitions_ = None 
+        self.partitions_ = None
+        self.id = self.sc.newRddId()
 
     #abstract
     #@param split: Partition
@@ -184,17 +186,17 @@ class RDD(object):
     def mapValues(self, f):
         return MapValues(self, f)
 
-    def union(self, resource):
-        return Union(self, resource)
+    def union(self, other):
+        return Union(self, other)
 
-    def join(self, resource):
-        return Join(self, resource)
+    def join(self, other):
+        return Join(self, other)
 
-    def crossProduct(self, resource):
-        return CrossProduct(self, resource)
+    def crossProduct(self, other):
+        return CrossProduct(self, other)
 
-    def groupByKey(self, numPartitions=None, partitioner=None):
-        return GroupByKey(self, numPartitions, partitioner)
+    def groupByKey(self, partitioner):
+        return GroupByKey(self, partitioner)
 
     #temp solution
     def collect(self, split = None, context = None):
@@ -211,6 +213,13 @@ class RDD(object):
         for i in self.compute():
             result = f(result, i)
         return result
+
+class PairRDD(RDD):
+
+    def __init__(self, oneParent=None, sc=None, deps=None):
+        RDD.__init__(oneParent, sc, deps)
+
+
 
 class Sample(RDD):
 
@@ -291,6 +300,27 @@ class ReduceByKey(RDD):
         for r in result.iteritems():
             yield r
 
+#2!
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+class GroupByKey(RDD):
+
+    def __init__(self, parent, partitioner):
+        RDD.__init__(self, None, parent.context(), [ShuffleDependency(parent, partitioner)])
+        self.result = {}
+        self.partitioner = partitioner
+
+    def getPartitioner(self):
+        return self.partitioner
+    
+    def compute(self):
+        for i in self.firstParent().iterator():
+            if self.result.has_key(i[0]):
+                self.result[i[0]].append(i[1])
+            else:
+                self.result[i[0]] = [i[1]]
+        for r in self.result.iteritems():
+            yield r
+
 #---not yet completed---
 
 class MapValues(RDD):
@@ -309,10 +339,10 @@ class MapValues(RDD):
 #todo
 class Union(RDD):
 
-    def __init__(self, parent, resource):
+    def __init__(self, parent, other):
         RDD.__init__(self)
         self.deps.append(OneToOneDependency(parent))
-        self.deps.append(OneToOneDependency(resource))
+        self.deps.append(OneToOneDependency(other))
 
     def compute(self):
         for r in chain(self.firstParent().iterator(), self.deps[1].compute()):
@@ -322,10 +352,10 @@ class Union(RDD):
 
 class Join(RDD):
 
-    def __init__(self, parent, resource, numPartitions=None, partitioner=None):
+    def __init__(self, parent, other, numPartitions=None, partitioner=None):
         RDD.__init__(self)
         self.getDependencies().append(parent)
-        self.getDependencies().append(resource)
+        self.getDependencies().append(other)
 
     def compute(self):
         for i in izip(self.firstParent().iterator(), self.deps[1].compute()):
@@ -336,37 +366,13 @@ class Join(RDD):
 
 class CrossProduct(RDD):
 
-    def __init__(self, parent, resource):
+    def __init__(self, parent, other):
         RDD.__init__(self)
         self.deps.append(parent)
-        self.deps.append(resource)
+        self.deps.append(other)
 
     def compute(self):
         for r in product(self.firstParent().iterator(), self.deps[1].compute()):
-            yield r
-
-    def iterator(self):
-        pass
-
-class GroupByKey(RDD):
-
-    def __init__(self, parent, numPartitions=None, partitioner=None):
-        RDD.__init__(self)
-        self.deps.append(ShuffleDependency(parent, partitioner))
-        self.result = {}
-        if partitioner:
-            self.partitioner = partitioner
-
-    def getPartitioner(self):
-        return self.partitioner
-    
-    def compute(self):
-        for i in self.firstParent().iterator():
-            if self.result.has_key(i[0]):
-                self.result[i[0]].append(i[1])
-            else:
-                self.result[i[0]] = [i[1]]
-        for r in self.result.iteritems():
             yield r
 
     def iterator(self):
@@ -389,6 +395,21 @@ class PartitionBy(RDD):
 '''
 class SparkContext(object):
 
+    def __init__(self):
+        self.dagScheduler = DAGScheduler(sc = self)
+        self.nextShuffleId = 0
+        self.nextRddId = 0
+
+    def newShuffleId(self):
+        id = self.nextShuffleId
+        self.nextShuffleId += 1
+        return id
+
+    def newRddId(self):
+        id = self.nextRddId
+        self.nextRddId += 1
+        return id
+
     #1!
     def parallelize(self, data, numSlices = 1):
         return Parallelize(data, numSlices, self, None)
@@ -396,6 +417,9 @@ class SparkContext(object):
     #1!
     def textFile(self, path, minPartitions = 1):
         return TextFile(path, minPartitions, self, None)
+
+    def runJob(self, rdd, func, partitions):
+        self.dagScheduler.runJob(rdd, func, partitions)
 
 #1!
 class Parallelize(RDD):
@@ -422,22 +446,313 @@ class TextFile(RDD):
         for i in range(minPartitions):
             for j in range(bucketSize):
                 self.partitions.append(data[i*(j+1)].split())
-        print self.partitions
+        #print self.partitions
 
     def compute(self, split, context):
         for r in iter(self.getPartitions()[split]):
             yield r
 
+
 '''
-    TaskContext
+    Scheduler
 '''
-class TaskContext():
+class ActiveJob():
+
+    def __init__(self, jobId, finalStage, func, partitions, listener = None, properties = None):
+        self.numPartitions = len(partitions)
+        self.finished = False * self.numPartitions
+        self.numFinished = 0
+
+class Stage():
+
+    def __init__(self, id, rdd, numTasks, shuffleDep, parents, jobId):
+        self.id = id
+        self.rdd = rdd
+        self.numTasks = numTasks
+        self.shuffleDep = shuffleDep
+        self.parents = parents
+        self.jobId = jobId
+        if shuffleDep:
+            self.isShuffleMap = True
+        else:
+            self.isShuffleMap = False
+        self.numPartitions  = len(rdd.partitions)
+        self.outputLocs = []
+        self.numAvailableOutputs = 0
+        self.jobIds = set()
+        self.resultOfJob = None
+        self.pendingTasks = []
+        self.nextAttemptId = 0
+        #self.info = StageInfo(self)
+
+    def newAttemptId(self):
+        id = nextAttemptId
+        nextAttemptId += 1
+        return id
+
+    def attempId(self):
+        return self.nextAttemptId
+
+    def isAvailable(self):
+        if not self.isShuffleMap:
+            return True
+        else:
+            return self.numAvailableOutputs == self.numPartitions
+
+    def addOutputLoc(self, partition, status):
+        if self.outputLocs[partition]:
+            self.outputLocs[partition].insert(0, status)
+        else:
+            numAvailableOutputs += 1
+
+    def removeOutputLoc(self, partition, bmAddress):
+        prevList = self.outputLocs[partition]
+        newList = [v for v in prevList if v.location != bmAddress]
+        self.outputLocs[partition] = newList
+        if prevList and not newList:
+            numAvailableOutputs -= 1
+    
+    def removeOutputsOnExecutor(execId):
+        pass
+
+class DAGScheduler():
+
+    def __init__(self, sc = None, taskScheduler = None, mapOutputTracker = None):
+        self.sc = sc
+        self.taskScheduler = taskScheduler
+        self.mapOutputTracker = mapOutputTracker
+
+        self.nextStageId = 0
+        self.nextJobId = 0
+
+        self.jobIdToStageIds = {}
+        self.stageIdToStage = {}
+        self.shuffleToMapStage = {}
+        self.jobIdToActiveJob = {}
+
+        self.waitingStages = set()
+        self.runningStages = set()
+        self.failedStages = set()
+        self.activeJobs = set()
+
+    def newJobId(self):
+        id = self.nextJobId
+        self.nextJobId += 1
+        return id
+
+    def newStageId(self):
+        id = self.nextStageId
+        self.nextStageId += 1
+        return id
+
+    def getShuffleMapStage(self, shuffleDep, jobId):
+        if self.shuffleToMapStage.has_key(shuffleDep.shuffleId):
+            return self.shuffleToMapStage[shuffleDep.shuffleId]
+        else:
+            stage = self.newOrUsedStage(shuffleDep.rdd, len(shuffleDep.rdd.partitions), shuffleDep, jobId)
+            self.shuffleToMapStage[shuffleDep.shuffleId] = stage
+            return stage
+
+    def newStage(self, rdd, numTasks, shuffleDep, jobId):
+        id = self.newStageId()
+        stage = Stage(id, rdd, numTasks, shuffleDep, self.getParentStages(rdd, jobId), jobId)
+        self.stageIdToStage[id] = stage
+        self.updateJobIdStageIdMaps(jobId, stage)
+        return stage
+
+    def newOrUsedStage(self, rdd, numTasks, shuffleDep, jobId):
+        stage = self.newStage(rdd, numTasks, shuffleDep, jobId)
+        #if self.mapOutputTracker.containsShuffle(shuffleDep.shuffleId):
+        #    serLocs = self.mapOutputTracker.getSerializedMapOutputStatuses(shuffleDep.shuffleId)
+        #    locs = MapOutputTracker.deserializeMapStatuses(serLocs)
+        #    for i in xrange(locs):
+        #        stage.outputLocs[i] = locs[i]
+        #    stage.numAvailableOutputs = len([l for l in locs if l])
+        #else:
+        #    self.mapOutputTracker.registerShuffle(shuffleDep.shuffleId, len(rdd.partitions))
+        return stage
+
+    def updateJobIdStageIdMaps(self, jobId, stage):
+        def updateJobIdStageIdMapsList(stages):
+            if stages:
+                s = stages[0]
+                s.jobIds.add(jobId)
+                if self.jobIdToStageIds.has_key(jobId):
+                    self.jobIdToStageIds[jobId].add(s.id)
+                else:
+                    self.jobIdToStageIds[jobId] = set([s.id])
+                parents = self.getParentStages(s.rdd, jobId)
+                parentsWithoutThisJobId = [p for p in parents if jobId in p.jobIds]
+                updateJobIdStageIdMapsList(parentsWithoutThisJobId.extend(stages[1:]))
+        updateJobIdStageIdMapsList([stage])
+    
+    def getParentStages(self, rdd, jobId):
+        parents = set()
+        visited = set()
+        def visit(r):
+            if r not in visited:
+                visited.add(r)
+                for dep in r.getDependencies():
+                    if issubclass(dep.__class__, ShuffleDependency):
+                        parents.add(self.getShuffleMapStage(dep, jobId))
+                    else:
+                        visit(dep.rdd)
+        visit(rdd)
+        return list(parents)
+
+    def activeJobForStage(self, stage):
+        print stage.jobIds
+        jobsThatUseStage = stage.jobIds
+        for j in jobsThatUseStage:
+            if self.jobIdToActiveJob.has_key(j):
+                return j
+            else:
+                return None
+
+    def submitStage(self, stage):
+        jobId = self.activeJobForStage(stage)
+        if jobId != None:
+            if stage not in self.waitingStages and stage not in self.runningStages and stage not in self.failedStages:
+                missing = sorted(self.getMissingParentStages(stage), key=lambda x: x.id)
+                if not missing:
+                    print "Submitting stage" + str(stage.id) + " (" + str(stage.rdd.id) + "), which has no missing parents"
+                    self.submitMissingTasks(stage, jobId)
+                else:
+                    for parent in missing:
+                        print "Looking for missing parent stage" + str(parent.id)
+                        self.submitStage(parent)
+                    self.waitingStages.add(stage)
+        else:
+            print "No active job for stage" + str(stage.id)
+
+    def submitMissingTasks(self, stage, jobId):
+        stage.pendingTasks = []
+        properties = None
+        if self.jobIdToActiveJob.has_key(jobId):
+            #todo properties
+            #properties = self.jobIdToActiveJob[stage.jobId].properties
+            pass
+        self.runningStages.add(stage)
+        #listenerBus.post(SparkListenerStageSubmitted(stage.info, properties))
+        print "Start running stage" + str(stage.id)
+
+
+    def getMissingParentStages(self, stage):
+        missing = set()
+        visited = set()
+        def visit(rdd):
+            if rdd not in visited:
+                #print rdd
+                print "(" + str(rdd.id) + ") visited"
+                visited.add(rdd)
+                for dep in rdd.getDependencies():
+                    if issubclass(dep.__class__, NarrowDependency):
+                        visit(dep.rdd)
+                    elif issubclass(dep.__class__, ShuffleDependency):
+                        mapStage = self.getShuffleMapStage(dep, stage.jobId)
+                        print "Stage (" + str(mapStage.id) + ") will do the shuffle"
+                        #todo
+                        #if not mapStage.isAvailable():
+                        missing.add(mapStage)
+        visit(stage.rdd)
+        return list(missing)
+
+    #def submitJob(self, rdd, func, partitions):
+    #    maxPartitions = len(rdd.partitions)
+    #    for p in partitions:
+    #        if p >= maxPartitions or p < 0:
+    #            return None
+    #    jobId = self.newJobId()
+
+
+    #def runJob(self, rdd, func, partitions):
+    #    waiter = self.submitJob(rdd, func, partitions)
+
+    def handleJobSubmitted(self, jobId, finalRDD, func, partitions):
+        finalStage = self.newStage(finalRDD, len(partitions), None, jobId)
+        if finalStage:
+            job = ActiveJob(jobId, finalStage, func, partitions)
+            self.jobIdToActiveJob[jobId] = job
+            self.activeJobs.add(job)
+            finalStage.resultOfJob = job
+            #listenerBus.post(SparkListenerJobStart(job.jobId, jobIdToStageIds(jobId).toArray, properties))
+            self.submitStage(finalStage)
+        #Only after we finished running we can execute this
+        #self.submitWaitingStages()
+
+    def submitWaitingStages(self):
+        waitingStagesCopy = list(self.waitingStages)
+        self.waitingStages.clear()
+        for stage in sorted(waitingStagesCopy, key=lambda x: x.jobId):
+          self.submitStage(stage)
+
+    def run(self, job):
+        pass
+
+
+'''
+    Task Related
+'''
+class Task():
 
     def __init__(self, stageId, partitionId):
         self.stageId = stageId
         self.partitionId = partitionId
+        self.context = None
 
+    def run(self, taskAttemptId, attemptNumber):
+        pass
+
+    def runTask(self, context):
+        pass
+
+class TaskMetrics():
+
+    def __init(self):
+        self.hostname = ''
+
+class TaskContext():
+
+    def __init__(self, stageId, partitionId, attemptId, runningLocally = False, taskMetrics = None):
+        self.stageId = stageId
+        self.partitionId = partitionId
+        self.attemptId = attemptId
+        self.completed = False
     
+'''
+    Executor
+'''
+class Executer():
+
+    def __init__(self, executorId, executorHostname, env, isLocal = False):
+        print "Starting executor ID " + executorId + " on host " + executorHostname
+        self.executorId = executorId
+        self.executorHostname = executorHostname
+        self.env = env
+        self.isLocal = isLocal
+        self.startDriverHeartbeater()
+
+    def startDriverHeartbeater(self):
+        pass
+
+    def launchTask(self, context, taskId, attemptNumber, taskName, serializedTask):
+        #todo
+        #tr = TaskRunner(context, taskId = taskId, attemptNumber = attemptNumber, taskName, serializedTask)
+        #runningTasks.put(taskId, tr)
+        #threadPool.execute(tr)
+        pass
+
+class TaskRunner():
+
+    def __init__(self):
+        pass
+
+class WorkerManager():
+
+    def __init__(self, execId, host, port):
+        self.execId = execId
+        self.host = host
+        self.port = port
 
 '''
     Test cases
@@ -502,5 +817,40 @@ if __name__ == '__main__':
     #print RDDC.groupByKey().collect()
     #print RDDC.reduceByKey(lambda a, b: a + b).collect()
 
-    doWordCount("wordcount.txt")
+    #doWordCount("wordcount.txt")
     #doPageRank("pagerank.txt")
+
+    lines = spark.textFile("wordcount.txt", 4)
+    print lines
+    print lines.id
+    words = lines.flatMap(lambda line: line.split(" "))
+    print words
+    print words.id
+    wordDict = words.map(lambda word: (word, 1))
+    print wordDict
+    print wordDict.id
+    groups = wordDict.groupByKey(HashPartitioner(4))
+    print groups
+    print groups.id
+    groupsMap = groups.flatMap(lambda x: x)
+    print groupsMap
+    print groupsMap.id
+    g1 = groupsMap.groupByKey(HashPartitioner(4))
+    print g1
+    print g1.id
+    g2 = g1.map(lambda x: x)
+    print g2
+    print g2.id
+    #counts = wordDict.reduceByKey(lambda a, b: a + b)
+
+    dag = DAGScheduler(spark)
+    #finalStage = dag.newStage(g2, 0, None, 0)
+    #print "Submit final stage (" + str(finalStage.id) + ") create by final RDD (" + str(g2.id) + ")"
+    dag.handleJobSubmitted(0, g2, None, range(4))
+    #print dag.jobIdToStageIds
+    #print dag.stageIdToStage
+    #print dag.shuffleToMapStage
+    #print dag.waitingStages
+    #print dag.runningStages
+    #print dag.failedStages
+    #print dag.activeJobs
