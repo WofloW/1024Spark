@@ -54,7 +54,7 @@ class RangePartitioner(Partitioner):
 
     def __init__(self):
         Partitioner.__init__(self)
-        self.ascending = true
+        self.ascending = True
 
     def getPartition(self, key):
         pass
