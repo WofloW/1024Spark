@@ -1,3 +1,6 @@
 #!/bin/bash
+#sh start_worker.sh /Users/WofloW/USF/CS636/1024Spark/
 
-python /Users/WofloW/USF/CS636/1024Spark/split_file.py
+echo -------   Worker Running   -------
+cd $1
+python split_file.py

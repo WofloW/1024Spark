@@ -14,9 +14,8 @@ class Remote(object):
         self.curdir  = os.getcwd()
         self.remote_command = os.path.join(self.curdir, self.command)
 
-
     def run(self):
-        proc = subprocess.call(['ssh', self.host, self.remote_command])
+        proc = subprocess.call(['ssh', self.host, self.remote_command, self.curdir])
 
 if __name__ == '__main__':
     remote = Remote(sys.argv[1], sys.argv[2])

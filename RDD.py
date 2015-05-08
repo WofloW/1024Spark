@@ -4,6 +4,8 @@ from operator import add
 import gevent
 from gevent.event import Event
 import re
+from split_file import *
+import os
 
 '''
     Util
@@ -92,6 +94,10 @@ class RangeDependency(NarrowDependency):
 
     def __init__(self, rdd, inStart, outStart, length):
         NarrowDependency.__init__(self, rdd)
+        # Wei Fang add
+        # self.inStart = inStart
+        # self.outStart = outStart
+        # self.length = length
 
     #todo not tested
     def getParents(self, partitionId):
@@ -437,20 +443,29 @@ class TextFile(RDD):
 
     def __init__(self, path, minPartitions = None, context = None, dependencies = None):
         RDD.__init__(self, oneParent = None, sc = context, deps = dependencies)
-        #print self.context()
         self.partitioner = None
-        f = open(path)
-        data = f.readlines()
-        f.close()
-        bucketSize = len(data) // minPartitions
-        for i in range(minPartitions):
-            for j in range(bucketSize):
-                self.partitions.append(data[i*(j+1)].split())
-        #print self.partitions
+        # data_dir = os.path.dirname(path)
+        data_dir = os.getcwd()
+        input_file = path
+        self.minPartitions = minPartitions
+        self.split_infos, self.file_info = split_file(data_dir, minPartitions, input_file)
+        self.lines = None
+        # f = open(path)
+        # data = f.readlines()
+        # f.close()
+        # bucketSize = len(data) // minPartitions
+        # for i in range(minPartitions):
+        #     for j in range(bucketSize):
+        #         self.partitions.append(data[i*(j+1)].split())
+
 
     def compute(self, split, context):
-        for r in iter(self.getPartitions()[split]):
+        if not self.lines:
+            self.lines = read_input(self.split_infos[split], split, len(self.split_infos), self.file_info).split("\n")
+        for r in iter(self.lines):
             yield r
+        # for r in iter(self.getPartitions()[split]):
+        #     yield r
 
 
 '''
@@ -486,8 +501,8 @@ class Stage():
         #self.info = StageInfo(self)
 
     def newAttemptId(self):
-        id = nextAttemptId
-        nextAttemptId += 1
+        id = self.nextAttemptId
+        self.nextAttemptId += 1
         return id
 
     def attempId(self):
@@ -503,14 +518,14 @@ class Stage():
         if self.outputLocs[partition]:
             self.outputLocs[partition].insert(0, status)
         else:
-            numAvailableOutputs += 1
+            self.numAvailableOutputs += 1
 
     def removeOutputLoc(self, partition, bmAddress):
         prevList = self.outputLocs[partition]
         newList = [v for v in prevList if v.location != bmAddress]
         self.outputLocs[partition] = newList
         if prevList and not newList:
-            numAvailableOutputs -= 1
+            self.numAvailableOutputs -= 1
     
     def removeOutputsOnExecutor(execId):
         pass
