@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     #
     spark = SparkContext()
-    lines = spark.textFile("wordcount.txt", 4)
+    lines = spark.textFile("wordcount.txt", 3)
     print lines
     print lines.id
     words = lines.flatMap(lambda line: line.split(" "))
@@ -124,4 +124,5 @@ if __name__ == '__main__':
     spark.taskScheduler.addWorker(4242)
     spark.taskScheduler.addWorker(4243)
     spark.taskScheduler.addWorker(4244)
-    print spark.collect(groups)
+    print spark.collect(g2)
+

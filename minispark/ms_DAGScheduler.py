@@ -59,9 +59,9 @@ class Stage():
         self.parents = parents
         self.jobId = jobId
         if shuffleDep:
-            self.isShuffleMap = True
+            self.isShuffle = True
         else:
-            self.isShuffleMap = False
+            self.isShuffle = False
         self.numPartitions  = len(rdd.getPartitions())
         self.outputLocs = [[] for i in range(self.numPartitions)]
         self.numAvailableOutputs = 0
@@ -70,19 +70,18 @@ class Stage():
         self.pendingTasks = []
 
     def isAvailable(self):
-        if not self.isShuffleMap:
+        if not self.isShuffle:
             return True
         else:
             return self.numAvailableOutputs == self.numPartitions
 
     def addOutputLoc(self, partition, port):
-        print "!!! Current output locs -> " + str(self.outputLocs) + " for partition " + str(partition)
         prevList = self.outputLocs[partition][:]
         if port not in prevList:
             self.outputLocs[partition].insert(0, port)
             if not prevList:
                 self.numAvailableOutputs += 1
-        print "!!! Now output locs -> " + str(self.outputLocs[partition])
+        print "Current output locs -> " + str(self.outputLocs)
 
     def removeOutputLoc(self, partition, port):
         prevList = self.outputLocs[partition]
@@ -109,6 +108,7 @@ class DAGScheduler():
         self.waitingStages = set()
         self.runningStages = set()
         self.failedStages = set()
+        self.successedStages = set()
 
         self.activeJobs = set()
 
@@ -122,13 +122,13 @@ class DAGScheduler():
         self.nextStageId += 1
         return id
 
-    def getShuffleMapStage(self, shuffleDep, jobId):
+    def getShuffleStage(self, shuffleDep, jobId):
         if self.shuffleToMapStage.has_key(shuffleDep.shuffleId):
-            print "Link to used stage " + str(self.shuffleToMapStage[shuffleDep.shuffleId].id)
-            return self.shuffleToMapStage[shuffleDep.shuffleId]
+            stage = self.shuffleToMapStage[shuffleDep.shuffleId]
+            #print "parent exists"
+            return stage
         else:
             stage = self.newStage(shuffleDep.rdd, len(shuffleDep.rdd.getPartitions()), shuffleDep, jobId)
-            print "Created new stage " + str(stage.id)
             self.shuffleToMapStage[shuffleDep.shuffleId] = stage
             return stage
 
@@ -154,6 +154,29 @@ class DAGScheduler():
                 updateJobIdStageIdMapsList(parentsWithoutThisJobId.extend(stages[1:]))
         updateJobIdStageIdMapsList([stage])
     
+    def getMissingParentStages(self, stage):
+        print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
+        missing = set()
+        visited = set()
+        def visit(rdd):
+            if rdd not in visited:
+                #print rdd
+                #print "(" + str(rdd.id) + ") visited"
+                visited.add(rdd)
+                for dep in rdd.getDependencies():
+                    if issubclass(dep.__class__, NarrowDependency):
+                        visit(dep.rdd)
+                    elif issubclass(dep.__class__, ShuffleDependency):
+                        mapStage = self.getShuffleStage(dep, stage.jobId)
+                        print "Found parent stage " + str(mapStage.id) + " (" + str(mapStage.rdd.id) + ")"
+                        if not mapStage.isAvailable():
+                            print "Stage " + str(mapStage.id) + " (" + str(mapStage.rdd.id) + ") is not finished"
+                            missing.add(mapStage)
+                        else:
+                            print "Stage " + str(mapStage.id) + " (" + str(mapStage.rdd.id) + ") is finished or not a shuffle stage"
+        visit(stage.rdd)
+        return list(missing)
+
     def getParentStages(self, rdd, jobId):
         parents = set()
         visited = set()
@@ -163,8 +186,8 @@ class DAGScheduler():
                 visited.add(r)
                 for dep in r.getDependencies():
                     if issubclass(dep.__class__, ShuffleDependency):
-                        print "Create parent stages <- rdd (" + str(rdd.id) + ")"
-                        parentStage = self.getShuffleMapStage(dep, jobId)
+                        #print "has parent stage"
+                        parentStage = self.getShuffleStage(dep, jobId)
                         parents.add(parentStage)
                     else:
                         visit(dep.rdd)
@@ -182,93 +205,66 @@ class DAGScheduler():
                 return None
 
     def submitStage(self, stage):
-        print "Submitting stage " + str(stage.id)
         jobId = self.activeJobForStage(stage)
         if jobId != None:
-            if stage not in self.waitingStages and stage not in self.runningStages and stage not in self.failedStages:
-                missing = sorted(self.getMissingParentStages(stage), key=lambda x: x.id)
+            if stage not in self.waitingStages and stage not in self.runningStages and stage not in self.failedStages and stage not in self.successedStages:
+                missing = sorted(self.getMissingParentStages(stage), key=lambda x: x.id, reverse=True)
                 if not missing:
                     #start running
                     print "Submitting stage " + str(stage.id) + " (" + str(stage.rdd.id) + "), which has no missing parents"
-                    self.submitMissingTasks(stage, jobId)
+                    self.submitFinalStage(stage, jobId)
                 else:
                     for parent in missing:
-                        print "Looking for missing parent stage " + str(parent.id)
+                        #print "Looking for missing parent stage " + str(parent.id)
                         self.submitStage(parent)
                     print "Add stage " + str(stage.id) + " to the waiting list"
                     self.waitingStages.add(stage)
         else:
             print "No active job for stage" + str(stage.id)
     
-    def getMissingParentStages(self, stage):
-        print "Checking missing parents for stage " + str(stage.id)
-        missing = set()
-        visited = set()
-        def visit(rdd):
-            if rdd not in visited:
-                #print rdd
-                #print "(" + str(rdd.id) + ") visited"
-                visited.add(rdd)
-                for dep in rdd.getDependencies():
-                    if issubclass(dep.__class__, NarrowDependency):
-                        visit(dep.rdd)
-                    elif issubclass(dep.__class__, ShuffleDependency):
-                        mapStage = self.getShuffleMapStage(dep, stage.jobId)
-                        print "Found parent stage " + str(mapStage.id) + " for stage " + str(stage.id)
-                        #todo
-                        #print "Check available outputs: " + str(mapStage.numAvailableOutputs)
-                        if not mapStage.isAvailable():
-                            missing.add(mapStage)
-                        else:
-                            print "Stage " + str(mapStage.id) + " is finished or not a shuffle stage"
-        visit(stage.rdd)
-        return list(missing)
-
     def submitWaitingStages(self):
-        print "There are still " + str(len(self.waitingStages)) + " stages remain in the waiting list"
-        waitingStagesCopy = list(self.waitingStages)
+        print "---------> There are still " + str(len(self.waitingStages)) + " stages remain in the waiting list"
+        waitingStagesCopy = self.waitingStages.copy()
         self.waitingStages.clear()
         for stage in sorted(waitingStagesCopy, key=lambda x: x.jobId):
-            self.submitStage(stage)
+               self.submitStage(stage)
 
-    def submitMissingTasks(self, stage, jobId):
+    def submitFinalStage(self, stage, jobId):
         stage.pendingTasks = []
 
         partitionsToCompute = []
-        if stage.isShuffleMap:
+        if stage.isShuffle:
             partitionsToCompute = [i for i in range(stage.numPartitions) if not stage.outputLocs[i]]
         else:
             job = stage.resultOfJob
             partitionsToCompute = [i for i in range(job.numPartitions) if not job.finished[i]]
-
-        print "Start running stage" + str(stage.id)
+        print "Target partitions: " + str(partitionsToCompute)
+        print "Start running stage" + str(stage.id) + " (" + str(stage.rdd.id) + ")"
         self.runningStages.add(stage)
-
+        print self.runningStages
         taskBinary = ''
-        if stage.isShuffleMap:
+        if stage.isShuffle:
             taskBinary = pickle.dumps([stage.rdd, stage.shuffleDep])
         else:
             taskBinary = pickle.dumps([stage.rdd, stage.resultOfJob.func])
-
         tasks = []
-        if stage.isShuffleMap:
+        if stage.isShuffle:
             for id in partitionsToCompute:
                 if not stage.outputLocs[id]:
-                    tasks.append(ShuffleMapTask(stage.id, taskBinary, id))
+                    tasks.append(ShuffleTask(stage.id, taskBinary, id))
         else:
             job = stage.resultOfJob
             for id in partitionsToCompute:
                 if not job.finished[id]:
                     p = job.partitions[id]#same thing
                     tasks.append(ResultTask(stage.id, taskBinary, p, id))
-
         if len(tasks) > 0:
             stage.pendingTasks.extend(tasks)
-            print "Task set of stage " + str(stage.id) + " has been submitted"
+            print "Task set of stage " + str(stage.id) + " (" + str(stage.rdd.id) + ") has been submitted"
             self.taskScheduler.submitTasks(TaskSet(tasks, stage.id, stage.jobId))
 
-    def markStageAsFinished(self, stage):
-          self.runningStages.remove(stage)
+    def runJob(self, rdd, func, partitions):
+        return self.submitJob(rdd, func, partitions)
 
     def submitJob(self, rdd, func, partitions):
         jobId = self.newJobId()
@@ -276,9 +272,6 @@ class DAGScheduler():
         threads = [gevent.spawn(self.handleJobSubmitted, jobId, rdd, func, partitions), gevent.spawn(waiter.awaitResult)]
         gevent.joinall(threads)
         return waiter.getResult()
-
-    def runJob(self, rdd, func, partitions):
-        return self.submitJob(rdd, func, partitions)
 
     def handleJobSubmitted(self, jobId, finalRDD, func, partitions):
         print "Job submitted"
@@ -291,7 +284,7 @@ class DAGScheduler():
             self.submitStage(finalStage)
         #Only after we finished running we can execute this
         self.submitWaitingStages()
-
+    
     #todo when a task is completed
     def handleTaskCompletion(self, task, port, result):
         stage = self.stageIdToStage[task.stageId]
@@ -308,22 +301,28 @@ class DAGScheduler():
                 if job.numFinished == job.numPartitions:
                     self.markStageAsFinished(stage)
             job.results[task.outputId].extend(result)
-        elif issubclass(task.__class__, ShuffleMapTask):
-            print "Shuffle task finished on " + str(port) + " for partition " + str(task.partitionId)
+        elif issubclass(task.__class__, ShuffleTask):
+            print "Shuffle task for stage " + str(stage.id) + " finished on " + str(port) + " for partition " + str(task.partitionId)
             stage.addOutputLoc(task.partitionId, port)
-            if stage in self.runningStages and stage.pendingTasks:
+            if stage in self.runningStages and not stage.pendingTasks:
                 self.markStageAsFinished(stage)
-            if None in stage.outputLocs:
-                #handle stage fails
-                self.submitStage(stage)
-            else:
-                newlyRunnable = []
-                for stage in self.waitingStages:
-                    if self.getMissingParentStages(stage):
-                        newlyRunnable.append(stage)
-                for stage in newlyRunnable:
-                    self.waitingStages.remove(stage)
-                    self.runningStages.add(stage)
-                for stage in sorted(newlyRunnable, key=lambda x: x.id):
-                    jobId = self.activeJobForStage(stage)
-                    self.submitMissingTasks(stage, jobId)
+                self.submitWaitingStages()
+            #if None in stage.outputLocs:
+            #    #handle stage fails
+            #    self.submitStage(stage)
+            #else:
+                #newlyRunnable = []
+                #for stage in self.waitingStages:
+                #    if self.getMissingParentStages(stage):
+                #        newlyRunnable.append(stage)
+                #for stage in newlyRunnable:
+                #    self.waitingStages.remove(stage)
+                #    self.runningStages.add(stage)
+                #for stage in sorted(newlyRunnable, key=lambda x: x.id, reverse=True):
+                #    jobId = self.activeJobForStage(stage)
+                #    self.submitFinalStage(stage, jobId)
+        
+
+    def markStageAsFinished(self, stage):
+        self.runningStages.remove(stage)
+        self.successedStages.add(stage)

@@ -172,7 +172,7 @@ class ShuffledRDD(RDD):
 
     def getData(self, partitionId):
         result = []
-        for i in range(self.partitioner.numPartitions):
+        for i in range(len(self.firstParent().getPartitions())):
             result.extend(self.context().shuffleManager.read(self.deps[0].shuffleId, i, partitionId))
         return result
 

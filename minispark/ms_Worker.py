@@ -27,16 +27,18 @@ class Worker(object):
         task = pickle.loads(taskBinary)
         rdd = task[0]
         func = task[1]
+        print "Working for rdd (" + str(rdd.id) + ")"
         result = func(rdd.iterator(partitionId, None))
         print "result:"
         print result
         return (result, self.port)
 
-    def runShuffleMapTask(self, taskBinary, partitionId):
+    def runShuffleTask(self, taskBinary, partitionId):
         print "running current shufflemap task for partition " + str(partitionId)
         task = pickle.loads(taskBinary)
         rdd = task[0]
         dep = task[1]
+        print "Working for rdd (" + str(rdd.id) + ")"
         bucket = [[] for i in range(dep.partitioner.numPartitions)]
         for key, value in rdd.iterator(partitionId, None):
             targetPartitionId = dep.partitioner.getPartition(key)
