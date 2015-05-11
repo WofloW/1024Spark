@@ -27,9 +27,18 @@ class SparkContext(Context):
 
     def __init__(self):
         Context.__init__(self)
+        self.serverHandle = None
         self.taskScheduler = TaskScheduler(sc = self)
         self.dagScheduler = DAGScheduler(sc = self, taskScheduler = self.taskScheduler)
         
+    def createServerHandle(self, port):
+        self.serverHandle = zerorpc.Server(self)
+        self.serverHandle.bind("tcp://127.0.0.1:" + str(port))
+        self.serverHandle.run()
+
+    def registerWorker(self, port):
+        self.taskScheduler.registerWorker(port)
+
     #1!
     def parallelize(self, data, numSlices = 1):
         return Parallelize(data, numSlices, self, None)

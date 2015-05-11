@@ -95,34 +95,35 @@ if __name__ == '__main__':
 
     #
     spark = SparkContext()
-    lines = spark.textFile("wordcount.txt", 3)
-    print lines
-    print lines.id
-    words = lines.flatMap(lambda line: line.split(" "))
-    print words
-    print words.id
-    wordDict = words.map(lambda word: (word, 1))
-    print wordDict
-    print wordDict.id
-    groups = wordDict.reduceByKey(HashPartitioner(4))
-    print groups
-    print groups.id
-    g1 = groups.groupByKey(HashPartitioner(5))
-    print g1
-    print g1.id
-    g2 = g1.map(lambda x: x)
-    print g2
-    print g2.id
-    ###
-    #dag = DAGScheduler(spark)
-    ###
-    #dag.handleJobSubmitted(0, wordDict, None, range(4))
-    ###
-    #print wordDict.__dict__
-    spark.taskScheduler.addWorker(4240)
-    spark.taskScheduler.addWorker(4241)
-    spark.taskScheduler.addWorker(4242)
-    spark.taskScheduler.addWorker(4243)
-    spark.taskScheduler.addWorker(4244)
-    print spark.collect(g2)
+
+    def do(spark):
+        lines = spark.textFile("wordcount.txt", 3)
+        print lines
+        print lines.id
+        words = lines.flatMap(lambda line: line.split(" "))
+        print words
+        print words.id
+        wordDict = words.map(lambda word: (word, 1))
+        print wordDict
+        print wordDict.id
+        groups = wordDict.reduceByKey(HashPartitioner(4))
+        print groups
+        print groups.id
+        g1 = groups.groupByKey(HashPartitioner(5))
+        print g1
+        print g1.id
+        g2 = g1.map(lambda x: x)
+        print g2
+        print g2.id
+        ###
+        #dag = DAGScheduler(spark)
+        ###
+        #dag.handleJobSubmitted(0, wordDict, None, range(4))
+        ###
+        #print wordDict.__dict__
+        print spark.collect(g2)
+
+    gevent.joinall([gevent.spawn(spark.createServerHandle, 4001), gevent.spawn(do, spark)])
+
+    
 
