@@ -2,6 +2,7 @@ from ms_RDD import *
 from ms_TaskScheduler import *
 from ms_DAGScheduler import *
 from ms_ShuffleManager import *
+from split_file import *
 
 '''
     Spark
@@ -60,30 +61,24 @@ class Parallelize(RDD):
         for r in iter(self.data):
             yield r
 
+
 class TextFile(RDD):
 
     def __init__(self, path, minPartitions = None, context = None, dependencies = None):
         RDD.__init__(self, oneParent = None, sc = context, deps = dependencies)
-        #print self.context()
-        self.path = path
-        self.minPartitions = minPartitions
         self.partitioner = None
-        self.partitions
-        self.data = []
-
-    def getData(self):
-        f = open(self.path)
-        data = f.readlines()
-        f.close()
-        bucketSize = len(data) // self.minPartitions
-        for i in range(self.minPartitions):
-            for j in range(bucketSize):
-                self.data.append(data[i*(j+1)].split())
-        return self.data
+        # data_dir = os.path.dirname(path)
+        data_dir = os.getcwd()
+        input_file = path
+        self.minPartitions = minPartitions
+        self.split_infos, self.file_info = split_file(data_dir, minPartitions, input_file)
+        self.lines = None
 
     def getPartitions(self):
         return range(self.minPartitions)
 
-    def compute(self, partitionId, context):
-        for r in iter(self.getData()[partitionId]):
+    def compute(self, split, context):
+        if not self.lines:
+            self.lines = read_input(self.split_infos[split], split, len(self.split_infos), self.file_info).split("\n")
+        for r in iter(self.lines):
             yield r
