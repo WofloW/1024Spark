@@ -21,16 +21,16 @@ class TaskScheduler():
         self.availableWorkers.put(port)
 
     def runTask(self, task):
-        print "Attempt to run the task"
+        #print "Attempt to run the task"
         workerResult = None
         workerPort = None
         workerStatus = None
         if self.availableWorkers.qsize() > 0:
             port = self.availableWorkers.get()
-            print "Find available workers on " + str(port)
+            print "Found available worker on " + str(port)
             worker = zerorpc.Client()
             worker.connect("tcp://127.0.0.1:" + str(port))
-            print "Connected to worker " + str(port)
+            #print "Connected to worker " + str(port)
             print "Run " + task.__class__.__name__ + " on partition" + str(task.partitionId)
             if issubclass(task.__class__, ResultTask):
                 workerResult, workerStatus, workerPort = worker.runResultTask(task.taskBinary, task.partitionId)
@@ -44,7 +44,7 @@ class TaskScheduler():
                 self.runTask(task)
         else:
             while self.availableWorkers.qsize() == 0:
-                print "Workers not available, waiting for more workers"
+                print "No available Worker to work on partition " + str(task.partitionId) + ", waiting for more workers..."
                 gevent.sleep(3)
             self.runTask(task)
 
@@ -54,7 +54,7 @@ class TaskScheduler():
         self.sc.dagScheduler.handleTaskCompletion(task, port, result)
 
     def submitTasks(self, taskset):
-        print "Taskset submitted for stage " + str(taskset.stageId)
+        #print "Task set submitted for stage " + str(taskset.stageId)
         threads = [gevent.spawn(self.runTask, t) for t in taskset.tasks]
         gevent.joinall(threads)
 

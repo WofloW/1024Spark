@@ -39,10 +39,10 @@ class JobWaiter():
 
     def awaitResult(self):
         while not self.isCreated():
-            print "Waiting for job creation..."
+            #print "Waiting for job creation..."
             gevent.sleep(1)
         while not self.isFinished():
-            print "Checking status..."
+            #print "Checking status..."
             gevent.sleep(1)
 
     def getResult(self):
@@ -157,7 +157,7 @@ class DAGScheduler():
         updateJobIdStageIdMapsList([stage])
     
     def getMissingParentStages(self, stage):
-        print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
+        #print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
         missing = set()
         visited = set()
         def visit(rdd):
