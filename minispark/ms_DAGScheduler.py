@@ -22,26 +22,28 @@ class ActiveJob():
 
         self.results = [[] for i in range(self.numPartitions)]
 
+    def isFinished(self):
+        return self.numFinished == self.numPartitions
+
 class JobWaiter():
 
     def __init__(self, dagScheduler, jobId):
         self.dagScheduler = dagScheduler
         self.jobId = jobId
-        self.jobFinished = False
+
+    def isFinished(self):
+        return self.dagScheduler.jobIdToActiveJob[self.jobId].isFinished()
+
+    def isCreated(self):
+        return self.dagScheduler.jobIdToActiveJob.has_key(self.jobId)
 
     def awaitResult(self):
-        LOOP = True
-        while LOOP:
-            if self.dagScheduler.jobIdToActiveJob.has_key(self.jobId):
-                while not self.jobFinished:
-                    print "Checking status..."
-                    result = reduce(lambda x, y: x and y, self.dagScheduler.jobIdToActiveJob[self.jobId].finished)
-                    self.jobFinished = result
-                    gevent.sleep(1)
-                LOOP = False
-            else:
-                print "Waiting for active job..."
-                gevent.sleep(1)
+        while not self.isCreated():
+            print "Waiting for job creation..."
+            gevent.sleep(1)
+        while not self.isFinished():
+            print "Checking status..."
+            gevent.sleep(1)
 
     def getResult(self):
         result = []
@@ -219,15 +221,21 @@ class DAGScheduler():
                         self.submitStage(parent)
                     print "Add stage " + str(stage.id) + " to the waiting list"
                     self.waitingStages.add(stage)
+                self.submitWaitingStages()
         else:
             print "No active job for stage" + str(stage.id)
     
     def submitWaitingStages(self):
-        print "---------> There are still " + str(len(self.waitingStages)) + " stages remain in the waiting list"
-        waitingStagesCopy = self.waitingStages.copy()
-        self.waitingStages.clear()
-        for stage in sorted(waitingStagesCopy, key=lambda x: x.jobId):
-               self.submitStage(stage)
+        count = len(self.waitingStages)
+        if count:
+            print "---------> There are still " + str(count) + " stages remain in the waiting list"
+            waitingStagesCopy = self.waitingStages.copy()
+            self.waitingStages.clear()
+            for stage in sorted(waitingStagesCopy, key=lambda x: x.jobId):
+                if stage not in self.successedStages:
+                    self.submitStage(stage)
+        else:
+            print "No stage left in the waiting list"
 
     def submitFinalStage(self, stage, jobId):
         stage.pendingTasks = []
@@ -307,20 +315,6 @@ class DAGScheduler():
             if stage in self.runningStages and not stage.pendingTasks:
                 self.markStageAsFinished(stage)
                 self.submitWaitingStages()
-            #if None in stage.outputLocs:
-            #    #handle stage fails
-            #    self.submitStage(stage)
-            #else:
-                #newlyRunnable = []
-                #for stage in self.waitingStages:
-                #    if self.getMissingParentStages(stage):
-                #        newlyRunnable.append(stage)
-                #for stage in newlyRunnable:
-                #    self.waitingStages.remove(stage)
-                #    self.runningStages.add(stage)
-                #for stage in sorted(newlyRunnable, key=lambda x: x.id, reverse=True):
-                #    jobId = self.activeJobForStage(stage)
-                #    self.submitFinalStage(stage, jobId)
         
 
     def markStageAsFinished(self, stage):
