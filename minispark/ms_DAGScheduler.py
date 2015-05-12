@@ -6,7 +6,8 @@ from ms_RDD import *
 from ms_TaskScheduler import *
 
 '''
-    Scheduler
+    DAG Scheduler
+    Analyzing dependencies graph, wrapping into stage and executing by stage
 '''
 class ActiveJob():
 
@@ -39,10 +40,10 @@ class JobWaiter():
 
     def awaitResult(self):
         while not self.isCreated():
-            print "Waiting for job creation..."
+            #print "Waiting for job creation..."
             gevent.sleep(1)
         while not self.isFinished():
-            print "Checking status..."
+            #print "Checking status..."
             gevent.sleep(1)
 
     def getResult(self):
@@ -157,7 +158,7 @@ class DAGScheduler():
         updateJobIdStageIdMapsList([stage])
     
     def getMissingParentStages(self, stage):
-        print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
+        #print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
         missing = set()
         visited = set()
         def visit(rdd):
@@ -239,7 +240,6 @@ class DAGScheduler():
 
     def submitFinalStage(self, stage, jobId):
         stage.pendingTasks = []
-
         partitionsToCompute = []
         if stage.isShuffle:
             partitionsToCompute = [i for i in range(stage.numPartitions) if not stage.outputLocs[i]]
@@ -249,7 +249,7 @@ class DAGScheduler():
         print "Target partitions: " + str(partitionsToCompute)
         print "Start running stage" + str(stage.id) + " (" + str(stage.rdd.id) + ")"
         self.runningStages.add(stage)
-        print self.runningStages
+        #print self.runningStages
         taskBinary = ''
         if stage.isShuffle:
             taskBinary = pickle.dumps([stage.rdd, stage.shuffleDep])

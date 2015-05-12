@@ -1,14 +1,11 @@
-from ms_ShuffleManager  import *
 '''
     Dependency
 '''
-#1!
 class Dependency():
 
     def __init__(self, rdd):
         self.rdd = rdd
 
-#1!
 class NarrowDependency(Dependency):
 
     def __init__(self, rdd):
@@ -18,7 +15,6 @@ class NarrowDependency(Dependency):
     def getParents(self, partitionId):
         pass
 
-#1!
 class OneToOneDependency(NarrowDependency):
 
     def __init__(self, rdd):
@@ -33,12 +29,11 @@ class RangeDependency(NarrowDependency):
     def __init__(self, rdd, inStart, outStart, length):
         NarrowDependency.__init__(self, rdd)
 
-    #todo not tested
+    #todo not in use
     def getParents(self, partitionId):
         if partitionId >= outStart and partitionId < outStart + length:
             return [partitionId - outStart + inStart]
 
-#1!
 class ShuffleDependency(Dependency):
 
     def __init__(self, rdd, partitioner):

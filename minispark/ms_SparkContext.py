@@ -2,10 +2,12 @@ from ms_RDD import *
 from ms_TaskScheduler import *
 from ms_DAGScheduler import *
 from ms_ShuffleManager import *
+from ms_Dependency import *
+
 from split_file import *
 
 '''
-    Spark
+    Spark Context
 '''
 class Context():
 
@@ -28,57 +30,49 @@ class SparkContext(Context):
 
     def __init__(self):
         Context.__init__(self)
+        self.serverHandle = None
         self.taskScheduler = TaskScheduler(sc = self)
         self.dagScheduler = DAGScheduler(sc = self, taskScheduler = self.taskScheduler)
+        #self.createServerHandle()
         
-    #1!
-    def parallelize(self, data, numSlices = 1):
-        return Parallelize(data, numSlices, self, None)
+    def createServerHandle(self, port):
+        self.serverHandle = zerorpc.Server(self)
+        self.serverHandle.bind("tcp://127.0.0.1:" + str(port))
+        self.serverHandle.run()
 
-    #1!
-    def textFile(self, path, minPartitions = 1):
-        return TextFile(path, minPartitions, Context(), None)
+    def registerWorker(self, port):
+        self.taskScheduler.registerWorker(port)
 
     def runJob(self, rdd, func, partitions):
         return self.dagScheduler.runJob(rdd, func, partitions)
 
-    #temp solution
-    def collect(self, rdd, partitionId = None, context = None):
+    #---APIs---
+
+    def textFile(self, path, minPartitions = 1):
+        return TextFile(path, minPartitions, Context())
+
+    def collect(self, rdd):
         return self.runJob(rdd, lambda iter: list(iter), rdd.getPartitions())
     
-    def count(self):
-        return len(self.collect())
-
-#1!
-class Parallelize(RDD):
-
-    def __init__(self, data, numSlices = None, context = None, dependencies = None):
-        RDD.__init__(self, oneParent = None, sc = context, deps = dependencies)
-        self.data = data
-        self.partitioner = None
-
-    def compute(self, partitionId, context):
-        for r in iter(self.data):
-            yield r
-
+    def count(self, rdd):
+        return len(self.collect(rdd))
 
 class TextFile(RDD):
 
-    def __init__(self, path, minPartitions = None, context = None, dependencies = None):
-        RDD.__init__(self, oneParent = None, sc = context, deps = dependencies)
-        self.partitioner = None
-        # data_dir = os.path.dirname(path)
-        data_dir = os.getcwd()
-        input_file = path
+    def __init__(self, path, minPartitions = 1, context = Context()):
+        RDD.__init__(self, oneParent = None, sc = context, deps = None)
+        #print self.context()
+        self.path = path
         self.minPartitions = minPartitions
-        self.split_infos, self.file_info = split_file(data_dir, minPartitions, input_file)
-        self.lines = None
+        self.partitioner = None
+        self.fileReader = MyTextReader(path, minPartitions)
+
+    def getData(self, partitionId):
+        return self.fileReader.line_iterator(partitionId)
 
     def getPartitions(self):
         return range(self.minPartitions)
 
-    def compute(self, split, context):
-        if not self.lines:
-            self.lines = read_input(self.split_infos[split], split, len(self.split_infos), self.file_info).split("\n")
-        for r in iter(self.lines):
+    def compute(self, partitionId, context):
+        for r in iter(self.getData(partitionId)):
             yield r

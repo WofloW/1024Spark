@@ -24,7 +24,7 @@ class Partitioner():
 #1!
 class HashPartitioner(Partitioner):
 
-    def __init__(self, numPartitions):
+    def __init__(self, numPartitions = 1):
         Partitioner.__init__(self)
         self.numPartitions = numPartitions
 

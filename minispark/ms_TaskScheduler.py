@@ -1,5 +1,6 @@
 import zerorpc
 import gevent
+import time
 from gevent.queue import Queue
 '''
     Task Related
@@ -11,36 +12,53 @@ class TaskScheduler():
         self.dagScheduler = None
         self.activeWorkers = set()
         self.availableWorkers = Queue()
-    
+
     def setDAGScheduler(self, dagScheduler):
         self.dagScheduler = dagScheduler
 
-    def addWorker(self, port):
+    def registerWorker(self, port):
+        print "Worker registered on port " + str(port)
         self.availableWorkers.put(port)
-            
+
     def runTask(self, task):
+        #print "Attempt to run the task"
         workerResult = None
         workerPort = None
-        if self.availableWorkers.qsize:
-            worker = zerorpc.Client()
+        workerStatus = None
+        if self.availableWorkers.qsize() > 0:
             port = self.availableWorkers.get()
-            worker.connect("tcp://127.0.0.1:" + str(port))
-            print "Connected to worker " + str(port)
-            print "Run " + task.__class__.__name__ + " on partition" + str(task.partitionId)
-            if issubclass(task.__class__, ResultTask):
-                workerResult, workerPort = worker.runResultTask(task.taskBinary, task.partitionId)
-            elif issubclass(task.__class__, ShuffleTask):
-                workerResult, workerPort = worker.runShuffleTask(task.taskBinary, task.partitionId)
-            self.handleTaskCompletion(task, workerPort, workerResult)
+            print "Found available worker on " + str(port)
+            try:
+                worker = zerorpc.Client()
+                worker.connect("tcp://127.0.0.1:" + str(port))
+                #print "Connected to worker " + str(port)
+                print "Run " + task.__class__.__name__ + " on partition" + str(task.partitionId)
+                if issubclass(task.__class__, ResultTask):
+                    workerResult, workerStatus, workerPort = worker.runResultTask(task.taskBinary, task.partitionId)
+                elif issubclass(task.__class__, ShuffleTask):
+                    workerResult, workerStatus, workerPort = worker.runShuffleTask(task.taskBinary, task.partitionId)
+                if workerStatus == 'completed':
+                    print "Task completed on worker " + str(workerPort)
+                    self.handleTaskCompletion(task, workerPort, workerResult)
+                elif workerStatus == 'failed':
+                    print "Task failed on worker " + str(workerPort) + ", attempt to run again!"
+                    self.runTask(task)
+            except:
+                print "Connection problem on worker " + str(port) + " detected, attempt to run again!"
+                self.runTask(task)
         else:
-            print "No enough workers"
+            while self.availableWorkers.qsize() == 0:
+                print "Partition " + str(task.partitionId) + " -> waiting workers"
+                gevent.sleep(3)
+            self.runTask(task)
+
             
     def handleTaskCompletion(self, task, port, result):
-        self.addWorker(port)
+        self.registerWorker(port)
         self.sc.dagScheduler.handleTaskCompletion(task, port, result)
 
     def submitTasks(self, taskset):
-        print "Taskset submitted for stage " + str(taskset.stageId)
+        #print "Task set submitted for stage " + str(taskset.stageId)
         threads = [gevent.spawn(self.runTask, t) for t in taskset.tasks]
         gevent.joinall(threads)
 
