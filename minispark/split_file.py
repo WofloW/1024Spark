@@ -151,8 +151,7 @@ class MyTextReader():
         self.lines = None
 
     def line_iterator(self, partition_id):
-        if not self.lines:
-            self.lines = read_input(self.split_infos[partition_id], partition_id, len(self.split_infos), self.file_info).split("\n")
+        self.lines = read_input(self.split_infos[partition_id], partition_id, len(self.split_infos), self.file_info).split("\n")
         for r in iter(self.lines):
             yield r
 
@@ -177,10 +176,26 @@ if __name__ == "__main__":
     # text = read_input(split_info[2], 2, 3, file_info)
     # print text
 
-    data = MyTextReader("example_data/functional.txt", 2).line_iterator(1)
-    for tmp in data:
+    data = MyTextReader("/Users/WofloW/USF/CS636/1024Spark/minispark/sort.txt", 4)
+
+    part0 = data.line_iterator(0)
+    part1 = data.line_iterator(1)
+    part2 = data.line_iterator(2)
+    part3 = data.line_iterator(3)
+
+    print("part0:")
+    for tmp in part0:
         print(tmp)
 
+    print("part1:")
+    for tmp in part1:
+        print(tmp)
+    print("part2:")
+    for tmp in part2:
+        print(tmp)
+    print("part3:")
+    for tmp in part3:
+        print(tmp)
 
     # while True:
     #     print "running"
