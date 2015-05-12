@@ -1,6 +1,7 @@
 from itertools import *
 from ms_Dependency import *
 from ms_Partitioner import *
+from topByKey import *
 
 '''
     RDD
@@ -75,6 +76,9 @@ class RDD(object):
             for i in iter:
                 yield (i[0], f(i[1]))
         return MappedRDD(func, self)
+
+    def heapByPartitions(self, numHeap, key = lambda x: x, reverse = False):
+        return HeapByPartitions(self, numHeap, key, reverse)
 
     def groupByKey(self, partitioner):
         def func(context, pid, iter):
@@ -175,3 +179,18 @@ class Join(RDD):
         #print self.getData(partitionId)
         for i in izip(self.getParentData(partitionId), self.getOtherData(partitionId)):
             yield (i[0][0], [i[0][1], i[1][1]])
+
+class HeapByPartitions(RDD):
+
+    def __init__(self, oneParent, numHeap, key = lambda x: x, reverse = False):
+        RDD.__init__(self, oneParent)
+        self.heaps = [MyHeap(numHeap, key, not reverse) for i in range(len(self.firstParent().getPartitions()))]
+
+    def getPartitions(self):
+        return self.firstParent().getPartitions()
+
+    def compute(self, partitionId, context):
+        for d in self.firstParent().iterator(partitionId, context):
+            self.heaps[partitionId].push(d)
+        for r in self.heaps[partitionId].collect():
+            yield r

@@ -54,6 +54,9 @@ class SparkContext(Context):
     def collect(self, rdd):
         return self.runJob(rdd, lambda iter: list(iter), rdd.getPartitions())
     
+    def TopByKey(self, rdd, top, key = lambda x: x, reverse = False):
+        return sorted(self.collect(rdd.heapByPartitions(top, key, reverse)), key = key, reverse = reverse)[:top]
+
     def count(self, rdd):
         return len(self.collect(rdd))
 
@@ -75,4 +78,5 @@ class TextFile(RDD):
 
     def compute(self, partitionId, context):
         for r in iter(self.getData(partitionId)):
-            yield r
+            if r:
+                yield r
