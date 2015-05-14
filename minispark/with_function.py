@@ -7,6 +7,7 @@ from types import FunctionType, CodeType
 # all pickle module used in this project needs function serialization.
 pickle.FUNCTION = 'f'
 
+
 def get_glob_name(code):
     for o in code.co_consts:
         if type(o) is CodeType:
@@ -30,13 +31,13 @@ def save_func(pickler, func):
             if g_var in func.func_globals:
                 glob[g_var] = func.func_globals[g_var]
             else:
-                #try:
+                # try:
                 #    glob['__builtins__'][g_var] = func.func_globals['__builtins__'][g_var]
                 #except:
                 #    try:
                 #        glob[g_var] = getattr(__builtin__, g_var)
                 #    except:
-                        pass
+                pass
 
     # write to stream
     pickler.save((marshal.dumps(func.func_code),
@@ -47,11 +48,13 @@ def save_func(pickler, func):
     pickler.write(pickle.FUNCTION)
     pickler.memoize(func)
 
+
 pickle.Pickler.dispatch[FunctionType] = save_func
+
 
 def load_func(unpickler):
     def Cell(content):
-        return (lambda:content).func_closure[0]
+        return (lambda: content).func_closure[0]
 
     code, glob, name, argdefs, closure = unpickler.stack[-1]
 
@@ -63,5 +66,6 @@ def load_func(unpickler):
 
     unpickler.stack[-1] \
         = FunctionType(code=code, globals=glob, name=name, argdefs=argdefs, closure=closure)
+
 
 pickle.Unpickler.dispatch[pickle.FUNCTION] = load_func

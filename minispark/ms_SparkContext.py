@@ -9,8 +9,9 @@ from split_file import *
 '''
     Spark Context
 '''
-class Context():
 
+
+class Context():
     def __init__(self):
         self.nextShuffleId = 0
         self.nextRddId = 0
@@ -26,15 +27,15 @@ class Context():
         self.nextRddId += 1
         return id
 
-class SparkContext(Context):
 
+class SparkContext(Context):
     def __init__(self):
         Context.__init__(self)
         self.serverHandle = None
-        self.taskScheduler = TaskScheduler(sc = self)
-        self.dagScheduler = DAGScheduler(sc = self, taskScheduler = self.taskScheduler)
-        #self.createServerHandle()
-        
+        self.taskScheduler = TaskScheduler(sc=self)
+        self.dagScheduler = DAGScheduler(sc=self, taskScheduler=self.taskScheduler)
+        # self.createServerHandle()
+
     def createServerHandle(self, port):
         self.serverHandle = zerorpc.Server(self)
         self.serverHandle.bind("tcp://127.0.0.1:" + str(port))
@@ -46,25 +47,25 @@ class SparkContext(Context):
     def runJob(self, rdd, func, partitions):
         return self.dagScheduler.runJob(rdd, func, partitions)
 
-    #---APIs---
+    # ---APIs---
 
-    def textFile(self, path, minPartitions = 1):
+    def textFile(self, path, minPartitions=1):
         return TextFile(path, minPartitions, Context())
 
     def collect(self, rdd):
         return self.runJob(rdd, lambda iter: list(iter), rdd.getPartitions())
-    
-    def TopByKey(self, rdd, top, key = lambda x: x, reverse = False):
-        return sorted(self.collect(rdd.heapByPartitions(top, key, reverse)), key = key, reverse = reverse)[:top]
+
+    def TopByKey(self, rdd, top, key=lambda x: x, reverse=False):
+        return sorted(self.collect(rdd.heapByPartitions(top, key, reverse)), key=key, reverse=reverse)[:top]
 
     def count(self, rdd):
         return len(self.collect(rdd))
 
-class TextFile(RDD):
 
-    def __init__(self, path, minPartitions = 1, context = Context()):
-        RDD.__init__(self, oneParent = None, sc = context, deps = None)
-        #print self.context()
+class TextFile(RDD):
+    def __init__(self, path, minPartitions=1, context=Context()):
+        RDD.__init__(self, oneParent=None, sc=context, deps=None)
+        # print self.context()
         self.path = path
         self.minPartitions = minPartitions
         self.partitioner = None
