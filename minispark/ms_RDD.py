@@ -6,10 +6,11 @@ from topByKey import *
 '''
     RDD
 '''
-class RDD(object):
 
+
+class RDD(object):
     def __init__(self, oneParent=None, sc=None, deps=None):
-        #init
+        # init
         self.deps = []
         self.sc = None
         if sc:
@@ -25,7 +26,7 @@ class RDD(object):
         self.partitions = None
         self.partitioner = None
 
-    #abstract
+    # abstract
     def compute(self, partitionId, context):
         pass
 
@@ -56,12 +57,14 @@ class RDD(object):
         def func(context, pid, iter):
             for i in ifilter(f, iter):
                 yield i
+
         return MappedRDD(func, self)
 
     def map(self, f):
         def func(context, pid, iter):
             for i in imap(f, iter):
                 yield i
+
         return MappedRDD(func, self)
 
     def flatMap(self, f):
@@ -69,15 +72,17 @@ class RDD(object):
             for i in imap(f, iter):
                 for j in i:
                     yield j
+
         return MappedRDD(func, self)
 
     def mapValues(self, f):
         def func(context, pid, iter):
             for i in iter:
                 yield (i[0], f(i[1]))
+
         return MappedRDD(func, self)
 
-    def heapByPartitions(self, numHeap, key = lambda x: x, reverse = False):
+    def heapByPartitions(self, numHeap, key=lambda x: x, reverse=False):
         return HeapByPartitions(self, numHeap, key, reverse)
 
     def groupByKey(self, partitioner):
@@ -90,6 +95,7 @@ class RDD(object):
                     result[i[0]] = [i[1]]
             for r in result.iteritems():
                 yield r
+
         return ShuffledRDD(func, self, partitioner)
 
     def reduceByKey(self, partitioner):
@@ -102,19 +108,20 @@ class RDD(object):
                     result[i[0]] = i[1]
             for r in result.iteritems():
                 yield r
+
         return ShuffledRDD(func, self, partitioner)
 
     def join(self, other, partitioner):
         return Join(self, other, partitioner)
 
-    #---End of APIs---
+        #---End of APIs---
 
-#---Narrow Dependency---
+
+# ---Narrow Dependency---
 
 class MappedRDD(RDD):
-
-    def __init__(self, func, parent = None, context = None, dependencies = None, preservesPartitioning = False):
-        RDD.__init__(self, oneParent = parent, sc = context, deps = dependencies)
+    def __init__(self, func, parent=None, context=None, dependencies=None, preservesPartitioning=False):
+        RDD.__init__(self, oneParent=parent, sc=context, deps=dependencies)
         self.func = func
         self.preservesPartitioning = preservesPartitioning
 
@@ -131,10 +138,10 @@ class MappedRDD(RDD):
         for r in self.func(context, partitionId, self.firstParent().iterator(partitionId, context)):
             yield r
 
+
 #---Wide Dependency---
 
 class ShuffledRDD(RDD):
-
     def __init__(self, func, parent, partitioner):
         RDD.__init__(self, None, parent.context(), [ShuffleDependency(parent, partitioner)])
         self.func = func
@@ -154,10 +161,11 @@ class ShuffledRDD(RDD):
         for r in self.func(context, partitionId, iter(self.getData(partitionId))):
             yield r
 
-class Join(RDD):
 
+class Join(RDD):
     def __init__(self, parent, other, partitioner):
-        RDD.__init__(self, None, parent.context(), [ShuffleDependency(parent, partitioner), ShuffleDependency(other, partitioner)])
+        RDD.__init__(self, None, parent.context(),
+                     [ShuffleDependency(parent, partitioner), ShuffleDependency(other, partitioner)])
         self.partitioner = partitioner
 
     def getPartitions(self):
@@ -180,9 +188,9 @@ class Join(RDD):
         for i in izip(self.getParentData(partitionId), self.getOtherData(partitionId)):
             yield (i[0][0], [i[0][1], i[1][1]])
 
-class HeapByPartitions(RDD):
 
-    def __init__(self, oneParent, numHeap, key = lambda x: x, reverse = False):
+class HeapByPartitions(RDD):
+    def __init__(self, oneParent, numHeap, key=lambda x: x, reverse=False):
         RDD.__init__(self, oneParent)
         self.heaps = [MyHeap(numHeap, key, not reverse) for i in range(len(self.firstParent().getPartitions()))]
 

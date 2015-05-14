@@ -1,5 +1,5 @@
 import zerorpc
-#Thanks Kaiming for his pickler
+# Thanks Kaiming for his pickler
 import pickle, with_function
 
 from ms_RDD import *
@@ -9,8 +9,9 @@ from ms_TaskScheduler import *
     DAG Scheduler
     Analyzing dependencies graph, wrapping into stage and executing by stage
 '''
-class ActiveJob():
 
+
+class ActiveJob():
     def __init__(self, jobId, finalStage, func, partitions):
         self.numPartitions = len(partitions)
         self.finished = [False] * self.numPartitions
@@ -26,8 +27,8 @@ class ActiveJob():
     def isFinished(self):
         return self.numFinished == self.numPartitions
 
-class JobWaiter():
 
+class JobWaiter():
     def __init__(self, dagScheduler, jobId):
         self.dagScheduler = dagScheduler
         self.jobId = jobId
@@ -52,8 +53,8 @@ class JobWaiter():
             result.extend(r)
         return result
 
-class Stage():
 
+class Stage():
     def __init__(self, id, rdd, numTasks, shuffleDep, parents, jobId):
         self.id = id
         self.rdd = rdd
@@ -65,7 +66,7 @@ class Stage():
             self.isShuffle = True
         else:
             self.isShuffle = False
-        self.numPartitions  = len(rdd.getPartitions())
+        self.numPartitions = len(rdd.getPartitions())
         self.outputLocs = [[] for i in range(self.numPartitions)]
         self.numAvailableOutputs = 0
         self.jobIds = set()
@@ -78,23 +79,23 @@ class Stage():
         else:
             return self.numAvailableOutputs == self.numPartitions
 
-    def addOutputLoc(self, partition, port):
+    def addOutputLoc(self, partition, ip_port):
         prevList = self.outputLocs[partition][:]
-        if port not in prevList:
-            self.outputLocs[partition].insert(0, port)
+        if ip_port not in prevList:
+            self.outputLocs[partition].insert(0, ip_port)
             if not prevList:
                 self.numAvailableOutputs += 1
         print "Current output locs -> " + str(self.outputLocs)
 
-    def removeOutputLoc(self, partition, port):
+    def removeOutputLoc(self, partition, ip_port):
         prevList = self.outputLocs[partition]
-        newList = [p for p in prevList if p != port]
+        newList = [p for p in prevList if p != ip_port]
         self.outputLocs[partition] = newList
         if prevList and len(prevList) != len(newList):
             self.numAvailableOutputs -= 1
 
-class DAGScheduler():
 
+class DAGScheduler():
     def __init__(self, sc, taskScheduler):
         self.sc = sc
         self.taskScheduler = taskScheduler
@@ -155,12 +156,14 @@ class DAGScheduler():
                 parents = self.getParentStages(s.rdd, jobId)
                 parentsWithoutThisJobId = [p for p in parents if jobId in p.jobIds]
                 updateJobIdStageIdMapsList(parentsWithoutThisJobId.extend(stages[1:]))
+
         updateJobIdStageIdMapsList([stage])
-    
+
     def getMissingParentStages(self, stage):
         #print "Checking missing parents for stage " + str(stage.id) + " (" + str(stage.rdd.id) + ")"
         missing = set()
         visited = set()
+
         def visit(rdd):
             if rdd not in visited:
                 #print rdd
@@ -176,7 +179,9 @@ class DAGScheduler():
                             print "Stage " + str(mapStage.id) + " (" + str(mapStage.rdd.id) + ") is not finished"
                             missing.add(mapStage)
                         else:
-                            print "Stage " + str(mapStage.id) + " (" + str(mapStage.rdd.id) + ") is finished or not a shuffle stage"
+                            print "Stage " + str(mapStage.id) + " (" + str(
+                                mapStage.rdd.id) + ") is finished or not a shuffle stage"
+
         visit(stage.rdd)
         return list(missing)
 
@@ -184,6 +189,7 @@ class DAGScheduler():
         parents = set()
         visited = set()
         waitingForVisit = []
+
         def visit(r):
             if r not in visited:
                 visited.add(r)
@@ -194,6 +200,7 @@ class DAGScheduler():
                         parents.add(parentStage)
                     else:
                         visit(dep.rdd)
+
         waitingForVisit.append(rdd)
         while waitingForVisit:
             visit(waitingForVisit.pop())
@@ -214,7 +221,8 @@ class DAGScheduler():
                 missing = sorted(self.getMissingParentStages(stage), key=lambda x: x.id, reverse=True)
                 if not missing:
                     #start running
-                    print "Submitting stage " + str(stage.id) + " (" + str(stage.rdd.id) + "), which has no missing parents"
+                    print "Submitting stage " + str(stage.id) + " (" + str(
+                        stage.rdd.id) + "), which has no missing parents"
                     self.submitFinalStage(stage, jobId)
                 else:
                     for parent in missing:
@@ -225,7 +233,7 @@ class DAGScheduler():
                 self.submitWaitingStages()
         else:
             print "No active job for stage" + str(stage.id)
-    
+
     def submitWaitingStages(self):
         count = len(self.waitingStages)
         if count:
@@ -264,7 +272,7 @@ class DAGScheduler():
             job = stage.resultOfJob
             for id in partitionsToCompute:
                 if not job.finished[id]:
-                    p = job.partitions[id]#same thing
+                    p = job.partitions[id]  #same thing
                     tasks.append(ResultTask(stage.id, taskBinary, p, id))
         if len(tasks) > 0:
             stage.pendingTasks.extend(tasks)
@@ -277,7 +285,8 @@ class DAGScheduler():
     def submitJob(self, rdd, func, partitions):
         jobId = self.newJobId()
         waiter = JobWaiter(self, jobId)
-        threads = [gevent.spawn(self.handleJobSubmitted, jobId, rdd, func, partitions), gevent.spawn(waiter.awaitResult)]
+        threads = [gevent.spawn(self.handleJobSubmitted, jobId, rdd, func, partitions),
+                   gevent.spawn(waiter.awaitResult)]
         gevent.joinall(threads)
         return waiter.getResult()
 
@@ -292,9 +301,9 @@ class DAGScheduler():
             self.submitStage(finalStage)
         #Only after we finished running we can execute this
         self.submitWaitingStages()
-    
+
     #todo when a task is completed
-    def handleTaskCompletion(self, task, port, result):
+    def handleTaskCompletion(self, task, ip_port, result):
         stage = self.stageIdToStage[task.stageId]
         #if finished
         print [s.partitionId for s in stage.pendingTasks]
@@ -310,12 +319,13 @@ class DAGScheduler():
                     self.markStageAsFinished(stage)
             job.results[task.outputId].extend(result)
         elif issubclass(task.__class__, ShuffleTask):
-            print "Shuffle task for stage " + str(stage.id) + " finished on " + str(port) + " for partition " + str(task.partitionId)
-            stage.addOutputLoc(task.partitionId, port)
+            print "Shuffle task for stage " + str(stage.id) + " finished on " + str(ip_port) + " for partition " + str(
+                task.partitionId)
+            stage.addOutputLoc(task.partitionId, ip_port)
             if stage in self.runningStages and not stage.pendingTasks:
                 self.markStageAsFinished(stage)
                 self.submitWaitingStages()
-        
+
 
     def markStageAsFinished(self, stage):
         self.runningStages.remove(stage)

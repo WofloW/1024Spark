@@ -5,8 +5,9 @@ import os
     Shuffle Manager
     Stores the intermediate files on local disk (hdfs)
 '''
-class ShuffleManager():
 
+
+class ShuffleManager():
     def __init__(self):
         self.shuffleIds = set()
 

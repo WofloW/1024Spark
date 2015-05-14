@@ -4,9 +4,9 @@ import heapq
 
 class MyHeap(object):
     # order:
-    #   True:maxHeap, ascending, low to high
+    # True:maxHeap, ascending, low to high
     #   False:minHeap, descending, high to low
-    def __init__(self, n, key = lambda x: x, order = True):
+    def __init__(self, n, key=lambda x: x, order=True):
         self.key = key
         self.n = n
         self._data = []
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     ascending_result = ascending.collect()
     print "result: ", ascending_result[::-1]
     # for e in reversed(ascending_result):
-    #     print e
+    # print e
 
     order = False
     print ("topByKey(%d, %s, %s)" % (4, "lambda x: x", order))

@@ -84,6 +84,7 @@ def split_file(data_dir, partition_num, input_file):
                         remaining_size = 0
     return split_info, file_info
 
+
 # read the data from split and also keep unit ( i.e. get next line from next split)
 # split_info : single file [(file_name, start, end)]
 # or multiple files [(file_name0, start, end), (file_name1, start, end)]
@@ -130,6 +131,7 @@ def read_input(split_info, partition_id, partition_num, file_info):
             .split(split_delimitter, 1)[0]
     return data
 
+
 # read data from file
 def read_data_from_file(filename, start, read_size):
     f = open(filename)
@@ -141,42 +143,24 @@ def read_data_from_file(filename, start, read_size):
         print "Error: can't close the original data file"
     return data
 
+
 class MyTextReader():
-    def __init__(self, path, minPartitions = None):
-        data_dir = os.path.dirname(path)
-        input_file = os.path.basename(path)
+    def __init__(self, path, minPartitions=None):
+        data_dir = os.getcwd()
         self.minPartitions = minPartitions
-        self.split_infos, self.file_info = split_file(data_dir, minPartitions, input_file)
-        # print self.split_infos
+        self.split_infos, self.file_info = split_file(data_dir, minPartitions, path)
         self.lines = None
 
     def line_iterator(self, partition_id):
-        self.lines = read_input(self.split_infos[partition_id], partition_id, len(self.split_infos), self.file_info).split("\n")
+        self.lines = read_input(self.split_infos[partition_id], partition_id, len(self.split_infos),
+                                self.file_info).split("\n")
         for r in iter(self.lines):
             yield r
 
 
 if __name__ == "__main__":
-    # multiple input file
 
-    # print "------- multiple file reader --------"
-    # split_info, file_info = split_file("example_data", 3, "functional_")
-    # print split_info
-
-    # print split_info[0][0]        #print partition 0, file 0 info
-    # print file_info
-    # text = read_input(split_info[1], 1, 3, file_info)
-    # print text
-
-    # single input file
-    # print "\n\n------- single file reader --------"
-    # split_info, file_info = split_file("example_data", 3, "functional.txt")
-    # print split_info
-    # print file_info
-    # text = read_input(split_info[2], 2, 3, file_info)
-    # print text
-
-    data = MyTextReader("/Users/WofloW/USF/CS636/1024Spark/minispark/sort.txt", 4)
+    data = MyTextReader("sort.txt", 4)
 
     part0 = data.line_iterator(0)
     part1 = data.line_iterator(1)
@@ -197,10 +181,10 @@ if __name__ == "__main__":
     for tmp in part3:
         print(tmp)
 
-    # while True:
-    #     print "running"
-    #     # If you want to get printed text from "ssh localhost python *.py", flush stdout after you print
-    #     # Otherwise, you will get printed text after the entire process is finished
-    #     # http://stackoverflow.com/questions/18322123/receiving-streaming-output-from-ssh-connection-in-python
-    #     sys.stdout.flush()
-    #     gevent.sleep(1)
+        # while True:
+        # print "running"
+        #     # If you want to get printed text from "ssh localhost python *.py", flush stdout after you print
+        #     # Otherwise, you will get printed text after the entire process is finished
+        #     # http://stackoverflow.com/questions/18322123/receiving-streaming-output-from-ssh-connection-in-python
+        #     sys.stdout.flush()
+        #     gevent.sleep(1)
