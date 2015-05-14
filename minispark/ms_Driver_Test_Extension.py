@@ -5,7 +5,7 @@ from ms_SparkContext import *
 '''
 def test(spark, path):
     numbers = spark.textFile("D:\Projects\ProP\CS636Assignment2\CS636Assignment2\minispark\sort.txt", 3)
-    print spark.TopByKey(numbers, 2)
+    print spark.TopByKey(numbers, 5)
 
 if __name__ == '__main__':
     port = sys.argv[1]
