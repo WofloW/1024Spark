@@ -3,6 +3,7 @@ from ms_TaskScheduler import *
 from ms_DAGScheduler import *
 from ms_ShuffleManager import *
 from ms_Dependency import *
+import socket
 
 from split_file import *
 
@@ -38,7 +39,8 @@ class SparkContext(Context):
 
     def createServerHandle(self, port):
         self.serverHandle = zerorpc.Server(self)
-        self.serverHandle.bind("tcp://127.0.0.1:" + str(port))
+        localip = socket.gethostbyname(socket.gethostname())
+        self.serverHandle.bind("tcp://%s:%s" % (localip, str(port)))
         self.serverHandle.run()
 
     def registerWorker(self, port):

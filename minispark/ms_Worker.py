@@ -11,6 +11,7 @@ from ms_SparkContext import *
 
 # Usage:
 # python ms_Worker.py 127.0.0.1:4000 4001
+# python ms_Worker.py 127.0.0.1:4000 4001
 
 
 class Worker(object):

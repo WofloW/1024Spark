@@ -2,11 +2,13 @@ import zerorpc
 import gevent
 import time
 from gevent.queue import Queue
+import subprocess
+import socket
 
 '''
     Task Related
 '''
-
+auto = True
 
 class TaskScheduler():
     def __init__(self, sc=None):
@@ -14,6 +16,8 @@ class TaskScheduler():
         self.dagScheduler = None
         self.activeWorkers = set()
         self.availableWorkers = Queue()
+        f = open("slaves")
+        self.new_worker_list = f.readlines()
 
     def setDAGScheduler(self, dagScheduler):
         self.dagScheduler = dagScheduler
@@ -50,6 +54,14 @@ class TaskScheduler():
                 print "Connection problem on worker " + str(ip_port) + " detected, attempt to run again!"
                 self.runTask(task)
         else:
+            if auto and len(self.new_worker_list) > 0:
+                new_worker_ipport = self.new_worker_list.pop()
+                worker_ip = new_worker_ipport.split(":")[0]
+                worker_port = new_worker_ipport.split(":")[1]
+                localip = socket.gethostbyname(socket.gethostname())
+                master_ipport = localip+":4000"
+                subprocess.Popen(["python", "pyremote.py", worker_ip, master_ipport, worker_port])
+                print "Automaticly create a worker %s" % new_worker_ipport
             while self.availableWorkers.qsize() == 0:
                 print "Partition " + str(task.partitionId) + " -> waiting workers"
                 gevent.sleep(3)

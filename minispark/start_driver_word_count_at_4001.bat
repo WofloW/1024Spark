@@ -1,1 +1,0 @@
-python ms_Driver_Word_Count.py 4001 "D:\Projects\ProP\CS636Assignment2\CS636Assignment2\minispark\wordcount.txt"
