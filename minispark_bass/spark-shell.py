@@ -24,6 +24,7 @@ def run_console(local=None, prompt=">>>"):
 
 
 if __name__ == '__main__':
+    subprocess.call(["sh", "stopall.sh"])
     port = sys.argv[1]
     spark = SparkContext()
     gevent.joinall([

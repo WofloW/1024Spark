@@ -1,23 +1,9 @@
-TopByKey
-
+from datetime import datetime
 from ms_SparkContext import *
-numbers = spark.textFile("sort.txt", 5)
-print spark.TopByKey(numbers, 5, lambda x:x.split(",")[1], False)
-
-
-Word Count
-
-from ms_SparkContext import *
-lines = spark.textFile("wordcount.txt", 4)
-words = lines.flatMap(lambda line: line.split(" "))
-wordDict = words.map(lambda word: (word, 1))
-counts = wordDict.reduceByKey(HashPartitioner(5))
-print spark.collect(counts)
-
 
 Page Rank
 
-from ms_SparkContext import *
+start_time = datetime.now()
 def computeContribs(urls, rank):
     """Calculates URL contributions to the rank of other URLs."""
     num_urls = len(urls)
@@ -48,3 +34,32 @@ for iteration in range(10):
 
 # Collects all URL ranks and dump them to console.
 for (link, rank) in spark.collect(ranks): print("%s has rank: %s." % (link, rank))
+
+end_time = datetime.now()
+print('Duration: {}'.format(end_time - start_time))
+
+
+
+
+Word Count
+
+from datetime import datetime
+from ms_SparkContext import *
+start_time = datetime.now()
+wlines = spark.textFile("file_5M.txt", 4)
+words = wlines.flatMap(lambda line: line.split(" "))
+wordDict = words.map(lambda word: (word, 1))
+counts = wordDict.reduceByKey(HashPartitioner(5))
+print spark.count(counts)
+end_time = datetime.now()
+print('Duration: {}'.format(end_time - start_time))
+
+
+TopByKey
+
+from datetime import datetime
+from ms_SparkContext import *
+numbers = spark.textFile("sort.txt", 4)
+print spark.TopByKey(numbers, 4, lambda x:x.split(",")[1], False)
+
+

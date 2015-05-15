@@ -23,9 +23,12 @@ class Worker(object):
 
     def createServerHandle(self):
         print "Start running"
-        self.serverHandle = zerorpc.Server(self)
-        self.serverHandle.bind("tcp://" + self.ip_port)
-        self.serverHandle.run()
+        try:
+            self.serverHandle = zerorpc.Server(self)
+            self.serverHandle.bind("tcp://" + self.ip_port)
+            self.serverHandle.run()
+        except:
+            pass
 
     def announceDriver(self, driver_ip_port):
         print "Connect to driver"
