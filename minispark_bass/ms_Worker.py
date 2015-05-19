@@ -24,7 +24,7 @@ class Worker(object):
     def createServerHandle(self):
         print "Start running"
         try:
-            self.serverHandle = zerorpc.Server(self)
+            self.serverHandle = zerorpc.Server(self, heartbeat=10000000)
             self.serverHandle.bind("tcp://" + self.ip_port)
             self.serverHandle.run()
         except:
@@ -32,7 +32,7 @@ class Worker(object):
 
     def announceDriver(self, driver_ip_port):
         print "Connect to driver"
-        driver = zerorpc.Client()
+        driver = zerorpc.Client(timeout=10000000, heartbeat=10000000)
         driver.connect("tcp://%s" % driver_ip_port)
         print "register this ip %s" % self.ip_port
         driver.registerWorker(self.ip_port)

@@ -146,7 +146,11 @@ def read_data_from_file(filename, start, read_size):
 
 class MyTextReader():
     def __init__(self, path, minPartitions=None):
-        data_dir = os.getcwd()
+        if "/" in path:
+            data_dir = os.path.dirname(path)
+            path = os.path.basename(path)
+        else:
+            data_dir = os.getcwd()
         self.minPartitions = minPartitions
         self.split_infos, self.file_info = split_file(data_dir, minPartitions, path)
         self.lines = None
@@ -170,7 +174,6 @@ if __name__ == "__main__":
     print("part0:")
     for tmp in part0:
         print(tmp)
-
     print("part1:")
     for tmp in part1:
         print(tmp)

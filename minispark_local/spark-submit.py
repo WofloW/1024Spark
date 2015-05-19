@@ -5,8 +5,8 @@ import importlib
 from ms_SparkContext import *
 
 # Usage:
-# python spark-sbumit.py word_count.py 4000
-# python spark-sbumit.py page_rank.py 4000
+# python spark-sbumit.py test_word_count.py 4000
+# python spark-sbumit.py test_page_rank.py 4000
 
 """
     Micro Spark Submit
@@ -17,7 +17,6 @@ if __name__ == '__main__':
     script = sys.argv[1]
     port = sys.argv[2]
     spark = SparkContext()
-
     module = importlib.import_module(script[:-3])
 
     gevent.joinall([

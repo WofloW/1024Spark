@@ -35,7 +35,7 @@ class TaskScheduler():
             ip_port = self.availableWorkers.get()
             print "Found available worker on " + ip_port
             try:
-                worker = zerorpc.Client()
+                worker = zerorpc.Client(timeout=1000000, heartbeat=10000000)
                 worker.connect("tcp://" + ip_port)
                 print "Connected to worker " + str(ip_port)
                 print "Run " + task.__class__.__name__ + " on partition" + str(task.partitionId)
@@ -58,7 +58,8 @@ class TaskScheduler():
                 new_worker_ipport = self.new_worker_list.pop()
                 worker_ip = new_worker_ipport.split(":")[0]
                 worker_port = new_worker_ipport.split(":")[1]
-                localip = socket.gethostbyname(socket.gethostname())
+                # localip = socket.gethostbyname(socket.gethostname())
+                localip = "127.0.0.1"
                 master_ipport = localip+":4000"
                 subprocess.Popen(["python", "pyremote.py", worker_ip, master_ipport, worker_port])
                 print "Automaticly create a worker %s" % new_worker_ipport

@@ -38,9 +38,9 @@ class SparkContext(Context):
         # self.createServerHandle()
 
     def createServerHandle(self, port):
-        self.serverHandle = zerorpc.Server(self)
-        localip = socket.gethostbyname(socket.gethostname())
-        self.serverHandle.bind("tcp://%s:%s" % (localip, str(port)))
+        self.serverHandle = zerorpc.Server(self, heartbeat=10000000)
+        # localip = socket.gethostbyname(socket.gethostname())
+        self.serverHandle.bind("tcp://%s:%s" % ("127.0.0.1", str(port)))
         self.serverHandle.run()
 
     def registerWorker(self, port):
@@ -57,7 +57,7 @@ class SparkContext(Context):
     def collect(self, rdd):
         return self.runJob(rdd, lambda iter: list(iter), rdd.getPartitions())
 
-    def TopByKey(self, rdd, top, key=lambda x: x, reverse=False):
+    def topByKey(self, rdd, top, key=lambda x: x, reverse=False):
         return sorted(self.collect(rdd.heapByPartitions(top, key, reverse)), key=key, reverse=reverse)[:top]
 
     def count(self, rdd):

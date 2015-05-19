@@ -35,7 +35,7 @@ class TaskScheduler():
             ip_port = self.availableWorkers.get()
             print "Found available worker on " + ip_port
             try:
-                worker = zerorpc.Client()
+                worker = zerorpc.Client(timeout=1000000, heartbeat=10000000)
                 worker.connect("tcp://" + ip_port)
                 print "Connected to worker " + str(ip_port)
                 print "Run " + task.__class__.__name__ + " on partition" + str(task.partitionId)

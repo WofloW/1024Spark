@@ -17,20 +17,21 @@ from ms_SparkContext import *
 class Worker(object):
     def __init__(self, port):
         # gevent.spawn(self.controller)
-        localip = socket.gethostbyname(socket.gethostname())
+        # localip = socket.gethostbyname(socket.gethostname())
+        localip = "127.0.0.1"
         self.ip_port = localip + ":" + port
         self.serverHandle = None
         self.clientHandle = None
 
     def createServerHandle(self):
         print "Start running"
-        self.serverHandle = zerorpc.Server(self)
+        self.serverHandle = zerorpc.Server(self, heartbeat=10000000)
         self.serverHandle.bind("tcp://" + self.ip_port)
         self.serverHandle.run()
 
     def announceDriver(self, driver_ip_port):
         print "Connect to driver"
-        driver = zerorpc.Client()
+        driver = zerorpc.Client(timeout=10000000, heartbeat=10000000)
         driver.connect("tcp://%s" % driver_ip_port)
         print "register this ip %s" % self.ip_port
         driver.registerWorker(self.ip_port)

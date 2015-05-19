@@ -85,6 +85,9 @@ class RDD(object):
     def heapByPartitions(self, numHeap, key=lambda x: x, reverse=False):
         return HeapByPartitions(self, numHeap, key, reverse)
 
+    def sortByKey(self, key=lambda x: x, reverse=False):
+        return SortByKey(self, key, reverse)
+
     def groupByKey(self, partitioner):
         def func(context, pid, iter):
             result = {}
@@ -201,4 +204,21 @@ class HeapByPartitions(RDD):
         for d in self.firstParent().iterator(partitionId, context):
             self.heaps[partitionId].push(d)
         for r in self.heaps[partitionId].collect():
+            yield r
+
+class SortByKey(RDD):
+    def __init__(self, oneParent, key=lambda x: x, reverse=False):
+        RDD.__init__(self, oneParent)
+        self.sort_data = [[] for i in range(len(self.firstParent().getPartitions()))]
+        self.key = key
+        self.reverse = reverse
+
+    def getPartitions(self):
+        return self.firstParent().getPartitions()
+
+    def compute(self, partitionId, context):
+        for d in self.firstParent().iterator(partitionId, context):
+            self.sort_data[partitionId].append(d)
+        self.sort_data[partitionId] = sorted(self.sort_data[partitionId], key=self.key, reverse=self.reverse)
+        for r in self.sort_data[partitionId]:
             yield r
